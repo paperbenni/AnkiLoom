@@ -1,17 +1,39 @@
 ---
 name: ankiloom
-description: Author one-file Markdown flashcards and sync them to Anki with AnkiLoom, including migration from Yanki and conflict recovery.
+description: Author Markdown flashcards in single-note or multi-card files and sync them to Anki with AnkiLoom, including migration from Yanki and conflict recovery.
 ---
 
 # AnkiLoom
 
-One Markdown file is one Anki note. Folders under the supplied card root become
+One Markdown file is one Anki note by default. Set `ankiloom: multi` in YAML
+frontmatter to put multiple notes in a file. Folders under the card root become
 Anki deck levels. Optional YAML frontmatter contains `tags` (a list of strings).
 `/` in tags becomes `::`. Preserve `noteId`; the tool writes it. Older cards may
 also contain a legacy `loomId`, which sync removes automatically. When copying a
 note to make a new one, remove `noteId` from the copy.
 
 ## Card syntax
+
+In multi-card files, a top-level `##` heading starts a note and is part of its
+prompt. Its section ends at the next `##` or `#` heading; lower headings remain
+inside the note. Use the syntax below inside each section. Only ATX headings
+count; code, math, quotes and lists do not define section boundaries.
+
+Outside heading sections, `question :: answer` on a paragraph line creates a
+basic note. Adjacent quick lines work. Exactly one spaced delimiter must be
+outside code, math, emphasis and links. Escape extra delimiters as `\::`.
+Quick cards are one physical line; multiline inline formatting in their
+paragraph is rejected. Lists, tables and code/HTML blocks do not create cards.
+Quick-card strike-through and emphasis are ordinary formatting, not cloze or
+typed-answer syntax. A `#` heading returns from a section to prose/quick cards.
+Ordinary prose outside sections is ignored. File tags apply to all notes.
+
+Multi-card IDs are hidden comments: `<!-- ankiloom noteId: 123 -->`, on the
+quick line or on a separate line inside its heading section. Do not use file-level
+noteId/loomId in multi mode. Preserve each comment when moving/reordering notes;
+remove it when copying a new note. Never remove multi mode while IDs remain.
+After an interrupted creation, rerun before editing content: unchanged content
+can recover after a move, while ambiguous matches block sync.
 
 - Basic: prompt, blank line, `---`, blank line, answer.
 - Reversed: prompt, two consecutive `---` rules separated by blank lines,
@@ -40,7 +62,7 @@ or deck edits detected against the local journal block sync. Copy wanted edits
 to Markdown first; `--force` explicitly permits replacing the Anki version.
 Do not use force as a generic retry. Ordinary retries recover interrupted writes.
 
-Missing files do not delete notes. `--prune` is explicit and uses the complete
+Missing files or removed sections do not delete notes. `--prune` is explicit and uses the complete
 original card root; excluded notes also count as missing. An empty root is
 refused for pruning. Sync is local unless `--ankiweb` is passed.
 

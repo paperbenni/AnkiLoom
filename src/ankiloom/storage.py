@@ -35,6 +35,12 @@ def atomic_write(path: Path, text: str):
 
 
 def metadata_source(card, *, remove=(), **values):
+    if card.section is not None:
+        from .multi import metadata_source as multi_metadata_source
+
+        if remove or set(values) != {"noteId"}:
+            raise LoomError("Multi-card metadata supports only noteId.", "parse")
+        return multi_metadata_source(card, values["noteId"])
     current = card.source
     _, _, end = frontmatter(current)
     newline = "\r\n" if "\r\n" in current else "\n"
@@ -142,6 +148,8 @@ def _validate_creations(data):
             raise TypeError("invalid creation fingerprint")
         if "noteId" in record and (type(record["noteId"]) is not int or record["noteId"] <= 0):
             raise ValueError("invalid creation note ID")
+        if "section" in record and (type(record["section"]) is not int or record["section"] < 0):
+            raise ValueError("invalid creation section")
 
 
 class State:

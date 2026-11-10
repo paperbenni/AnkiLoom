@@ -50,6 +50,12 @@ def test_cloze_code_and_math_remain_literal(tmp_path):
     assert r"\(x_i\)" in c.fields["Front"]
 
 
+def test_multi_identity_examples_in_raw_html_are_literal(tmp_path):
+    c = card(tmp_path, "Q\n\n---\n\n<pre>\n<!-- ankiloom noteId: 123 -->\n</pre>\n")
+    assert c.note_id is None
+    assert "ankiloom noteId: 123" in c.fields["Back"]
+
+
 def test_media_copy_and_content_hash(tmp_path):
     (tmp_path / "image.png").write_bytes(b"image")
     c = card(tmp_path, "Picture\n\n---\n\n![[image.png|900]]\n\n![same](image.png)")

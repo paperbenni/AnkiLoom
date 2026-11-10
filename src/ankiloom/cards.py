@@ -1,10 +1,11 @@
-"""Parse one Markdown file per note. Structural decisions use Markdown tokens."""
+"""Parse Markdown notes. Structural decisions use Markdown tokens."""
 
 import hashlib
 import html
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlparse
 
 import yaml
@@ -14,6 +15,9 @@ from yaml.resolver import BaseResolver
 
 from .errors import LoomError
 from .progress import ProgressCallback, ProgressUpdate, no_progress
+
+if TYPE_CHECKING:
+    from .multi import Section
 
 MODELS = {
     "basic": "AnkiLoom - Basic",
@@ -75,15 +79,47 @@ def frontmatter(source: str):
 
 
 @dataclass
+class Document:
+    source: str
+    sections: list["Section"] = field(default_factory=list)
+    env: dict = field(default_factory=dict)
+
+
+@dataclass
 class Card:
     path: Path
-    source: str
+    document: Document
     meta: dict
     kind: str
     fields: dict[str, str]
     deck: str
     tags: list[str]
     media: dict[str, bytes] = field(default_factory=dict)
+    section: int | None = None
+
+    @property
+    def line(self):
+        return self.document.sections[self.section].line if self.section is not None else None
+
+    @property
+    def source(self):
+        return self.document.source
+
+    @source.setter
+    def source(self, value):
+        self.document.source = value
+        if self.document.sections:
+            from .multi import sections
+
+            self.document.sections = sections(value)
+
+    @property
+    def key(self):
+        return self.path, self.section
+
+    def location(self, root=None):
+        path = self.path.relative_to(root) if root else self.path
+        return f"{path}:{self.line}" if self.line else str(path)
 
     @property
     def note_id(self):
@@ -158,14 +194,39 @@ def render(text: str, card: Card, root: Path, parsed_tokens=None):
                 token.children = children
                 rewrite(token.children)
 
-    tokens = md.parse(text) if parsed_tokens is None else parsed_tokens
+    tokens = md.parse(text, card.document.env.copy()) if parsed_tokens is None else parsed_tokens
     rewrite(tokens)
-    return '<div class="ankiloom yanki">' + md.renderer.render(tokens, md.options, {}) + "</div>"
+    return (
+        '<div class="ankiloom yanki">'
+        + md.renderer.render(tokens, md.options, card.document.env)
+        + "</div>"
+    )
 
 
-def parse_card(path: Path, root: Path, deck_prefix: str = ""):
+def parse_document(path: Path, root: Path, deck_prefix: str = ""):
     source = path.read_bytes().decode("utf-8")
     meta, body, _ = frontmatter(source)
+    mode = meta.get("ankiloom")
+    if mode is not None and mode != "multi":
+        raise LoomError("Use ankiloom: multi for a multi-card file, or omit ankiloom.", "parse")
+    if mode == "multi" and any(key in meta for key in ("noteId", "loomId")):
+        raise LoomError(
+            "Multi-card files use per-card ID comments; remove file-level noteId and loomId.",
+            "parse",
+        )
+    if mode != "multi" and "<!--" in body:
+        tokens = markdown().parse(body)
+        if any(
+            token.type in {"html_block", "html_inline"}
+            and token.content.lstrip().startswith("<!--")
+            and re.search(r"<!--\s*ankiloom\b", token.content)
+            for block in tokens
+            for token in [block, *(block.children or [])]
+        ):
+            raise LoomError(
+                "Per-card ID comments require ankiloom: multi; preserve the mode and IDs when editing this file.",
+                "parse",
+            )
     note_id = meta.get("noteId")
     if note_id is not None and (type(note_id) is not int or note_id <= 0):
         raise LoomError("noteId must be a positive integer; omit it for new notes.", "parse")
@@ -183,15 +244,58 @@ def parse_card(path: Path, root: Path, deck_prefix: str = ""):
         raise LoomError("The ankiloom:: tag prefix is reserved for sync identities.", "parse")
     parts = list(path.relative_to(root).parent.parts)
     deck = "::".join(([deck_prefix] if deck_prefix else []) + parts) or root.name
-    card = Card(path, source, meta, "basic", {}, deck, sorted({t.replace("/", "::") for t in tags}))
+    document = Document(source)
+    markdown().parse(body, document.env)
+    normalized_tags = sorted({t.replace("/", "::") for t in tags})
+    if mode == "multi":
+        from .multi import sections
+
+        cards = []
+        document.sections = sections(source)
+        for index, section in enumerate(document.sections):
+            card = Card(
+                path,
+                document,
+                {"noteId": section.note_id} if section.note_id else {},
+                "basic",
+                {},
+                deck,
+                normalized_tags,
+                section=index,
+            )
+            try:
+                if section.quick:
+                    front, back = section.quick
+                    card.fields = {
+                        "Front": render(front, card, root),
+                        "Back": render(back, card, root),
+                    }
+                else:
+                    parse_body(card, section.body, root)
+            except LoomError as exc:
+                raise LoomError(f"line {section.line}: {exc}", exc.code) from exc
+            cards.append(card)
+        return cards
+    card = Card(path, document, meta, "basic", {}, deck, normalized_tags)
+    return [parse_body(card, body, root)]
+
+
+def parse_card(path: Path, root: Path, deck_prefix: str = ""):
+    cards = parse_document(path, root, deck_prefix)
+    if len(cards) != 1:
+        raise LoomError("Expected one note; use parse_document for multi-card files.", "parse")
+    return cards[0]
+
+
+def parse_body(card: Card, body: str, root: Path):
     md = markdown()
-    tokens = md.parse(body)
+    tokens = md.parse(body, card.document.env.copy())
     rules = [t for t in tokens if t.type == "hr" and t.level == 0]
     lines = body.splitlines(keepends=True)
     first = rules[0].map[0] if rules else len(lines)
     front = "".join(lines[:first])
     back = "".join(lines[rules[0].map[1] :]) if rules else ""
-    front_tokens = md.parse(front)
+    front_tokens = md.parse(front, card.document.env.copy())
     clozes = [t for block in front_tokens for t in (block.children or []) if t.type == "s_open"]
     extra = ""
     converted = None
@@ -214,7 +318,7 @@ def parse_card(path: Path, root: Path, deck_prefix: str = ""):
             return "{{c" + str(n) + "::"
 
         # Convert via tokens to leave code/math untouched. Hints use final emphasis.
-        converted = md.parse(front)
+        converted = md.parse(front, card.document.env.copy())
         for block in converted:
             children = block.children or []
             for i, token in enumerate(children):
@@ -298,18 +402,19 @@ def scan(root: Path, deck_prefix="", excludes=(), *, progress: ProgressCallback 
         try:
             if path.is_symlink() or not path.resolve().is_relative_to(root):
                 raise LoomError("Symlinked cards are unsupported; use ordinary files.", "input")
-            card = parse_card(path, root, deck_prefix)
-            for value, seen, label in [
-                (card.note_id, ids, "noteId"),
-                (card.meta.get("loomId"), loom_ids, "loomId"),
-            ]:
-                if value is not None:
-                    if value in seen:
-                        raise LoomError(
-                            f"Duplicate {label} {value}; also used in {seen[value]}", "duplicate"
-                        )
-                    seen[value] = rel.as_posix()
-            cards.append(card)
+            for card in parse_document(path, root, deck_prefix):
+                for value, seen, label in [
+                    (card.note_id, ids, "noteId"),
+                    (card.meta.get("loomId"), loom_ids, "loomId"),
+                ]:
+                    if value is not None:
+                        if value in seen:
+                            raise LoomError(
+                                f"{card.location(root)}: Duplicate {label} {value}; also used in {seen[value]}",
+                                "duplicate",
+                            )
+                        seen[value] = card.location(root)
+                cards.append(card)
         except (LoomError, UnicodeError, OSError) as exc:
             errors.append(f"{rel}: {exc}")
     progress(ProgressUpdate("Reading Markdown", len(paths), len(paths)))

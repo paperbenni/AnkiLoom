@@ -66,6 +66,15 @@ def test_initial_sync_does_not_loop_on_own_ids_or_journal(monkeypatch, server, t
     assert events[-1]["event"] == "stopped"
 
 
+def test_multi_card_metadata_writes_do_not_trigger_another_sync(monkeypatch, server, tmp_path):
+    path = tmp_path / "study.md"
+    path.write_text("---\nankiloom: multi\n---\nQ :: A\nR :: B\n\n## Third\n\n---\n\nC\n")
+    events = run(monkeypatch, server, tmp_path)
+    assert len(syncs(events)) == 1
+    assert len(server[0].notes) == 3
+    assert path.read_text().count("<!-- ankiloom noteId:") == 3
+
+
 def test_burst_of_edits_is_debounced(monkeypatch, server, tmp_path):
     path = card(tmp_path)
 

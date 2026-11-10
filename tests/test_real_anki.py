@@ -15,6 +15,11 @@ from ankiloom.sync import CSS, templates
         ("reverse", "Q\n\n---\n\n---\n\nA\n\n---\n\nExtra", 2),
         ("cloze", "~~1 Paris _city_~~ is in ~~2 France~~.", 2),
         ("type", "Capital?\n\n_Paris_", 1),
+        ("basic", "---\nankiloom: multi\n---\nQ :: A", 1),
+        ("basic", "---\nankiloom: multi\n---\n## Q\n\n---\n\nA", 1),
+        ("reverse", "---\nankiloom: multi\n---\n## Q\n\n---\n\n---\n\nA", 2),
+        ("cloze", "---\nankiloom: multi\n---\n## ~~1 Paris _city_~~ is in ~~2 France~~.", 2),
+        ("type", "---\nankiloom: multi\n---\n## Capital?\n\n_Paris_", 1),
     ],
 )
 def test_real_anki_renders_generated_cards(tmp_path, kind, source, count):

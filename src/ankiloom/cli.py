@@ -138,7 +138,8 @@ def show_skill(ctx, param, value):
 def cli(ctx, progress, verbose):
     """Weave Markdown flashcards into Anki through AnkiConnect.
 
-    One file per note. Use check for offline validation, then sync --dry-run
+    One file per note by default; ankiloom: multi enables multiple notes.
+    Use check for offline validation, then sync --dry-run
     to compare with Anki. Notes are never deleted unless you pass --prune.
     """
     ctx.ensure_object(dict).update(progress=progress, verbose=verbose)
@@ -185,7 +186,8 @@ def json_option(function):
 def check(root, deck, exclude, as_json):
     """Validate ROOT offline, including note syntax, duplicate IDs and local media.
 
-    ROOT defaults to ./cards. Every visible .md file is treated as a note.
+    ROOT defaults to ./cards. Visible .md files contain one note by default;
+    ankiloom: multi enables heading cards and question :: answer lines.
     Optional ROOT/ankiloom.toml supports deck, exclude and url settings.
     """
     root = root.resolve()

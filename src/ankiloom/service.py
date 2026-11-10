@@ -74,6 +74,7 @@ def sync_once(options: SyncOptions, *, progress: ProgressCallback = no_progress)
             )
             for change, entry in zip(changes, entries):
                 change["noteId"] = entry.card.note_id
+                change["path"] = entry.card.location(root)
             if options.ankiweb:
                 progress(ProgressUpdate("Syncing AnkiWeb"))
                 client.call("sync")

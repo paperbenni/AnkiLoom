@@ -2,8 +2,10 @@
 
 **Markdown flashcards → Anki. No Obsidian, custom regexes, or background service.**
 
-One Markdown file per note. A horizontal rule separates the question and answer;
-folders become decks. Sync through AnkiConnect, preserving existing review history.
+A horizontal rule separates the question and answer; folders become decks.
+Use one file per note, or opt into [multi-card files](https://paperbenni.xyz/AnkiLoom/guide/card-format.html#multiple-notes-per-file)
+with heading sections and `question :: answer` lines. Sync through AnkiConnect,
+preserving existing review history.
 
 **[Documentation](https://paperbenni.xyz/AnkiLoom/)** ·
 [Card format](https://paperbenni.xyz/AnkiLoom/guide/card-format.html) ·
@@ -24,13 +26,13 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Validation works offline:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.5.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.6.0 ankiloom check ./cards
 ```
 
 Or install the CLI:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.5.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.6.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards

@@ -96,31 +96,16 @@ def relative_path(card: Card, root: Path) -> str:
 
 
 def pending_assignments(cards, pending, root):
-    """Associate journaled creations with cards by path, noteId, then content."""
+    """Associate interrupted creations by noteId, source location, then content."""
     assignments = {}
     used = set()
-    by_path = {}
-    for token, record in pending.items():
-        by_path.setdefault(record["path"], []).append(token)
-    for card in cards:
-        tokens = by_path.get(relative_path(card, root), [])
-        if not tokens:
-            continue
-        if len(tokens) > 1:
-            raise LoomError(
-                f"Multiple interrupted creations are journaled for {relative_path(card, root)}; "
-                "resolve them in .ankiloom/state.json.",
-                "state",
-            )
-        assignments[card.path] = tokens[0]
-        used.add(tokens[0])
     by_note = {}
     for token, record in pending.items():
         note_id = record.get("noteId")
         if note_id is not None:
             by_note.setdefault(note_id, []).append(token)
     for card in cards:
-        if card.path in assignments or not card.note_id:
+        if card.key in assignments or not card.note_id:
             continue
         tokens = [token for token in by_note.get(card.note_id, []) if token not in used]
         if not tokens:
@@ -131,9 +116,33 @@ def pending_assignments(cards, pending, root):
                 "resolve them in .ankiloom/state.json.",
                 "state",
             )
-        assignments[card.path] = tokens[0]
+        assignments[card.key] = tokens[0]
         used.add(tokens[0])
-    unmatched_cards = [card for card in cards if card.path not in assignments and not card.note_id]
+    by_path = {}
+    for token, record in pending.items():
+        by_path.setdefault((record["path"], record.get("section")), []).append(token)
+    for card in cards:
+        if card.key in assignments:
+            continue
+        tokens = [
+            token
+            for token in by_path.get((relative_path(card, root), card.section), [])
+            if token not in used
+            and (
+                card.section is None or pending[token]["fingerprint"] == creation_fingerprint(card)
+            )
+        ]
+        if not tokens:
+            continue
+        if len(tokens) > 1:
+            raise LoomError(
+                f"Multiple interrupted creations are journaled for {relative_path(card, root)}; "
+                "resolve them in .ankiloom/state.json.",
+                "state",
+            )
+        assignments[card.key] = tokens[0]
+        used.add(tokens[0])
+    unmatched_cards = [card for card in cards if card.key not in assignments and not card.note_id]
     unmatched_tokens = [token for token in pending if token not in used]
     cards_by_fingerprint = {}
     tokens_by_fingerprint = {}
@@ -151,7 +160,7 @@ def pending_assignments(cards, pending, root):
                 "path or resolve .ankiloom/state.json manually.",
                 "conflict",
             )
-        assignments[matching_cards[0].path] = tokens[0]
+        assignments[matching_cards[0].key] = tokens[0]
         used.add(tokens[0])
     return assignments
 
@@ -166,7 +175,7 @@ class Entry:
 
     def report(self, root: Path):
         return {
-            "path": str(self.card.path.relative_to(root)),
+            "path": self.card.location(root),
             "action": self.action,
             "noteId": self.remote["id"] if self.remote else None,
             "deck": self.card.deck,
@@ -219,7 +228,7 @@ def plan(
     progress(ProgressUpdate("Reading Anki notes", len(note_ids), len(note_ids)))
     entries, problems, used = [], [], set()
     for index, card in enumerate(cards):
-        progress(ProgressUpdate("Checking notes", index, len(cards), card.path.name))
+        progress(ProgressUpdate("Checking notes", index, len(cards), card.location(root)))
         try:
             path = relative_path(card, root)
             loom_id = card.meta.get("loomId")
@@ -230,7 +239,7 @@ def plan(
                     f"Multiple Anki notes have identity {loom_id}; resolve the duplicates in Anki.",
                     "conflict",
                 )
-            token = assignments.get(card.path)
+            token = assignments.get(card.key)
             pending_record = pending.get(token) if token else None
             token_notes = token_matches.get(creation_tag(token), []) if token else []
             if len(token_notes) > 1:
@@ -261,6 +270,8 @@ def plan(
                     )
                 note_id = note_id or recorded or found
                 pending_record["path"] = path
+                if card.section is not None:
+                    pending_record["section"] = card.section
                 pending_record["fingerprint"] = creation_fingerprint(card)
             if (
                 pending_record
@@ -365,11 +376,16 @@ def plan(
                     "fingerprint": creation_fingerprint(card),
                     "noteId": remote["id"],
                 }
+            if token:
+                if card.section is None:
+                    pending[token].pop("section", None)
+                else:
+                    pending[token]["section"] = card.section
             entries.append(Entry(card, action, remote, target, token))
         except LoomError as exc:
             if exc.code in {"connection", "anki"}:
                 raise
-            problems.append({"path": str(card.path), "message": str(exc), "code": exc.code})
+            problems.append({"path": card.location(), "message": str(exc), "code": exc.code})
     progress(ProgressUpdate("Checking notes", len(cards), len(cards)))
     new_kinds = {e.card.kind for e in entries if e.action == "create"}
     available = client.call("modelNames") if new_kinds else []
@@ -490,7 +506,7 @@ def apply(
         )
         card, remote, target = entry.card, entry.remote, entry.target
         if card.path.read_bytes().decode("utf-8") != card.source:
-            raise LoomError(f"{card.path}: edited during sync; rerun.", "conflict")
+            raise LoomError(f"{card.location()}: edited during sync; rerun.", "conflict")
         legacy = "loomId" in card.meta
         creation = entry.creation
         pending_record = None
