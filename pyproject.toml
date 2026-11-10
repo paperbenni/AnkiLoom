@@ -18,6 +18,7 @@ dependencies = [
     "filelock>=3.16,<4",
     "rich-click>=1.9,<2",
     "rich>=14,<15",
+    "packaging>=24,<27",
 ]
 
 [project.scripts]

@@ -18,6 +18,7 @@ from .errors import LoomError, operation_error
 from .progress import ProgressUpdate
 from .service import SyncOptions, sync_once
 from .terminal import SyncDisplay, configure_color, console, render_error, render_result
+from .update import update_installation
 from .watch import watch_folder
 
 EXIT_CODES = {
@@ -34,6 +35,8 @@ EXIT_CODES = {
     "connection": 4,
     "anki": 4,
     "state": 3,
+    "installation": 2,
+    "update": 5,
 }
 
 
@@ -415,6 +418,42 @@ def style(css, url, timeout, include_yanki, dry_run, as_json):
                 display.update(ProgressUpdate("Updating styles", index, len(models), name))
                 client.call("updateModelStyling", model={"name": name, "css": content})
     emit({"ok": True, "dryRun": dry_run, "models": models}, as_json)
+
+
+@cli.command()
+@click.option(
+    "--head",
+    is_flag=True,
+    help="Use the latest GitHub default-branch commit instead of the latest release.",
+)
+@click.option(
+    "--check",
+    "check_only",
+    is_flag=True,
+    help="Report available updates without changing the installation.",
+)
+@click.option(
+    "--timeout",
+    type=click.FloatRange(min=0, min_open=True),
+    default=30.0,
+    show_default=True,
+    help="GitHub request timeout in seconds.",
+)
+@json_option
+@guarded
+def update(head, check_only, timeout, as_json):
+    """Update a permanent uv tool installation from GitHub.
+
+    Defaults to the latest published release; --head selects the newest commit.
+    Detects the installation manager and delegates replacement to uv. Editable,
+    pipx and disposable/project environments get manual update instructions.
+    --check works in any installation. No update checks run during other commands.
+    """
+    with SyncDisplay(as_json=as_json) as display:
+        report = update_installation(
+            head=head, check=check_only, timeout=timeout, progress=display.update
+        )
+    emit(report, as_json)
 
 
 def main():
