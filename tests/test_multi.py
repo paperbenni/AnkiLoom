@@ -15,7 +15,7 @@ HEADER = "---\nankiloom: multi\ntags: [study/topic]\n---\n"
 
 def document(root, body, name="study.md"):
     path = root / name
-    path.write_text(HEADER + body)
+    path.write_text(HEADER + body, encoding="utf-8")
     return path
 
 
@@ -233,6 +233,16 @@ def test_single_card_files_keep_existing_syntax(tmp_path):
     cards = parse_document(path, tmp_path)
     assert len(cards) == 1 and cards[0].section is None
     assert "A :: B" in cards[0].fields["Back"]
+
+
+def test_unicode_cards_remain_utf8_after_id_writes(tmp_path):
+    path = document(tmp_path, "Français :: 東京\n\n## Où ?\n\n---\n\nÀ Paris.\n")
+    cards = scan(tmp_path)
+    before = [deepcopy(card.fields) for card in cards]
+    for index, card in enumerate(cards):
+        write_metadata(card, noteId=100 + index)
+    assert "東京" in path.read_bytes().decode("utf-8")
+    assert [card.fields for card in scan(tmp_path)] == before
 
 
 @pytest.mark.parametrize(
