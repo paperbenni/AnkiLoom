@@ -133,7 +133,7 @@ def server():
             self.end_headers()
             self.wfile.write(data)
 
-        def log_message(self, *args):
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

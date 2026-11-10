@@ -263,15 +263,17 @@ root and use `--url` / `ANKICONNECT_URL` directly.
 ```sh
 uv sync --locked
 uv run pytest
-uv run --with anki pytest tests/test_real_anki.py
-uv run ruff check src tests
-uv run ruff format --check src tests
+just check
 uv build
 ```
 
+`just check` runs Ruff lint and formatting checks, followed by Astral's ty
+type checker across source and tests. All check tools and the Anki test engine
+are locked development dependencies; Anki is not a runtime dependency.
+
 HTTP integration tests exercise AnkiConnect requests, migration, conflicts,
-locks, dry runs, pruning and lost responses after create/update/delete. Optional
-real Anki-engine tests create a temporary collection and verify all four note
+locks, dry runs, pruning and lost responses after create/update/delete.
+Real Anki-engine tests create a temporary collection and verify all four note
 models generate and render the expected cards. Tests never use your real profile.
 
 ## Design and references

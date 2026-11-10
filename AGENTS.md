@@ -1,8 +1,8 @@
 # AnkiLoom
 
-Use `uv run` for development. Run pytest and Ruff before committing changes.
-The optional `uv run --with anki pytest tests/test_real_anki.py` verifies models
-with Anki's actual collection engine, entirely in a temporary collection.
+Use `uv run` for development. Run `just check` (Ruff lint/format and ty) and
+`uv run pytest` before committing changes. Development dependencies include
+Anki's collection engine; tests verify models entirely in temporary collections.
 
 The CLI definitions are the source of truth for help. Keep `--skill` generated
 from those definitions; avoid static copies of option lists in the skill.

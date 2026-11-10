@@ -3,8 +3,9 @@
 import base64
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
-from .cards import MODELS, YANKI_MODELS
+from .cards import MODELS, YANKI_MODELS, Card
 from .errors import LoomError
 from .storage import metadata_source, write_metadata
 
@@ -71,13 +72,13 @@ def compatible_partial(remote, before, target):
 
 @dataclass
 class Entry:
-    card: object
+    card: Card
     action: str
     remote: dict | None
     target: dict
     loom_id: str
 
-    def report(self, root):
+    def report(self, root: Path):
         return {
             "path": str(self.card.path.relative_to(root)),
             "action": self.action,

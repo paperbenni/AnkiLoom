@@ -1,9 +1,8 @@
-"""Optional real-engine checks: uv run --with anki pytest tests/test_real_anki.py."""
+"""Verify generated cards with Anki's engine in a temporary collection."""
 
 import pytest
-
-pytest.importorskip("anki")
 from anki.collection import Collection
+from anki.decks import DeckId
 
 from ankiloom.cards import MODELS, parse_card
 from ankiloom.sync import CSS, templates
@@ -38,7 +37,8 @@ def test_real_anki_renders_generated_cards(tmp_path, kind, source, count):
         note = collection.new_note(model)
         for name, value in card.fields.items():
             note[name] = value
-        collection.add_note(note, collection.decks.id("Test"))
+        deck = collection.decks.add_normal_deck_with_name("Test")
+        collection.add_note(note, DeckId(deck.id))
         cards = note.cards()
         assert len(cards) == count
         for actual in cards:

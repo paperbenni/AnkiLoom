@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlparse
 import yaml
 from markdown_it import MarkdownIt
 from mdit_py_plugins.dollarmath import dollarmath_plugin
+from yaml.resolver import BaseResolver
 
 from .errors import LoomError
 
@@ -63,7 +64,7 @@ def frontmatter(source: str):
                 result[key] = loader.construct_object(value_node)
             return result
 
-        UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, mapping)
+        UniqueLoader.add_constructor(BaseResolver.DEFAULT_MAPPING_TAG, mapping)
         meta = yaml.load("".join(lines[1:end]), Loader=UniqueLoader) or {}
     except (yaml.YAMLError, TypeError) as exc:
         raise LoomError(f"Invalid YAML frontmatter: {exc}", "parse") from exc
