@@ -84,6 +84,25 @@ def render_result(value: dict) -> None:
         out.print(
             Text(("Preview: " if value.get("dryRun") else "✓ ") + message, style="bold green")
         )
+    elif value.get("event") == "update":
+        current, target = value["currentVersion"], value["targetVersion"]
+        channel = "GitHub HEAD" if value["channel"] == "head" else "latest release"
+        status = value["status"]
+        if status == "updated":
+            message = f"✓ Updated AnkiLoom {current} → {value['installedVersion']} ({channel})."
+        elif status == "update_available":
+            message = f"Update available: {current} → {target} ({channel})."
+        elif status == "ahead":
+            message = f"AnkiLoom {current} is newer than {channel} ({target}); keeping it."
+        else:
+            message = f"✓ AnkiLoom {current} is up to date ({channel})."
+        out.print(
+            Text(message, style="bold green" if status in {"updated", "up_to_date"} else "cyan")
+        )
+        if value["channel"] == "head":
+            old = (value["currentCommit"] or "unknown")[:12]
+            new = value["targetCommit"][:12]
+            out.print(Text(f"Commit: {old} → {new}", style="dim"))
     elif "kinds" in value:
         kinds = ", ".join(f"{count} {kind}" for kind, count in value["kinds"].items())
         out.print(
