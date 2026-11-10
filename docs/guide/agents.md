@@ -29,3 +29,27 @@ Successful responses include `ok: true`; failures include `ok: false` and
 
 
 See the [generated CLI reference](../reference/cli.md) for every command and option, or the [exported agent skill](../reference/skill.md).
+
+## Terminal output
+
+Help, summaries and errors use Rich formatting. Human-facing commands show a
+spinner, current phase and note counts in interactive terminals. Unchanged
+notes are summarized in one line; `ankiloom --verbose sync` includes their paths.
+Repeated preflight failures are grouped by cause. JSON errors retain every
+individual issue in `error.details`.
+
+Global presentation flags go before the command:
+
+```sh
+ankiloom --color always sync
+ankiloom --color never sync
+ankiloom --no-progress sync
+ankiloom --verbose sync --dry-run
+```
+
+`--color auto` is the default and respects `NO_COLOR` and terminal detection.
+`--color always` explicitly overrides `NO_COLOR`; `--color never` disables ANSI
+colors. `--progress` enables progress explicitly, including readable phase lines
+when output is redirected. JSON output always has no ANSI styling or progress,
+even when those global options are enabled. The exported agent skill remains
+plain text.

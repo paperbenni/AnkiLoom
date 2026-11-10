@@ -27,3 +27,16 @@ is reported rather than silently recreated.
 For fewer writes, unchanged notes skip note/media mutations. AnkiLoom copies
 media but never garbage-collects it; Anki's media tools handle that separately.
 There is no two-way merge or automatic conflict resolution.
+
+## Read performance
+
+Preflight batches identity lookups with AnkiConnect's read-only `multi` action,
+then reads fields and card decks in bulk. Unchanged notes need no second read
+during apply. Notes that will be modified are still rechecked immediately
+before writing and verified afterward; conflict detection stays active.
+
+On the 44-note development collection, this reduced an unchanged sync from
+223 HTTP requests and about 11.2 seconds to four requests and about 0.42 seconds,
+excluding CLI startup. Markdown parsing accounted for about 0.08 seconds.
+Reads are chunked for larger collections. Mutations remain individually
+journaled and are never retried at the HTTP request level.
