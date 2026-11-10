@@ -2,7 +2,7 @@
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 For syncing, run Anki desktop with [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
-installed. Obsidian is never needed. AnkiLoom does not open or edit Anki's database directly.
+installed. You can use any text editor; Obsidian is not required.
 
 Run without a permanent installation:
 

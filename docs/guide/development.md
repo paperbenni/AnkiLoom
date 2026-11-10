@@ -16,6 +16,52 @@ locks, dry runs, pruning and lost responses after create/update/delete.
 Real Anki-engine tests create a temporary collection and verify all four note
 models generate and render the expected cards. Tests never use your real profile.
 
+## Sync internals
+
+Markdown tokens determine card boundaries and protect code, math and other
+formatting from being interpreted as card syntax. Multi-card notes share a
+document source snapshot so one ID write does not invalidate sibling notes.
+Generated ID edits are parsed again during preflight to check that card
+boundaries, content and neighboring IDs remain intact.
+
+Creation recovery journals a temporary token before calling `addNote` and
+includes that token in an `ankiloom::create::…` tag. If the response is lost,
+the next sync can recover the note by its tag. The returned numeric ID is
+saved in the journal before the tag is removed. Successful sync keeps the
+numeric ID as the permanent sync identity in Markdown. Preserve response-loss
+tests when changing the order of these writes.
+
+AnkiConnect has no atomic compare-and-swap operation. Changed notes are
+rechecked before writes and verified afterward. Mutating requests are never
+retried at the HTTP request level; a subsequent sync uses the journal to
+recover interrupted operations. A per-root lock prevents concurrent local
+AnkiLoom syncs, but cannot exclude edits made in Anki itself.
+
+### Read performance
+
+Preflight batches legacy identity and interrupted-creation lookups using
+AnkiConnect's read-only `multi` action, then reads fields and card decks in
+bulk. Unchanged notes skip a second read during apply. Reads are chunked for
+larger collections.
+
+Recorded on the 44-note development collection, an unchanged sync fell from
+223 HTTP requests and about 11.2 seconds to three requests and about 0.4
+seconds, excluding CLI startup. Markdown parsing accounted for about 0.08
+seconds. These are development measurements, not performance guarantees.
+
+## Watch and update internals
+
+The watcher polls content hashes, so it can detect edits even when file size
+and modification time stay the same. After a sync, it ignores only the exact
+source text produced by that sync. Taking a fresh folder snapshot at that
+point would risk swallowing edits made during the operation.
+
+The updater checks the running environment against `uv tool dir` and the uv
+tool receipt before replacing an installation. It resolves a release or HEAD
+to an immutable commit, delegates installation to uv, then verifies both the
+installed version and commit. HEAD checks compare commits even when versions
+match; unknown commit provenance is treated as an available HEAD update.
+
 ## Design and references
 
 Python was chosen for [uvx's isolated, Git-installable tools](https://docs.astral.sh/uv/guides/tools/),

@@ -15,14 +15,14 @@ hero:
 
 features:
   - title: Your Markdown, your editor
-    details: One file per note. A horizontal rule separates question and answer. Folders become decks, without Obsidian or custom regexes.
+    details: Write one note per file, or combine quick facts and longer cards in a study sheet. Folders become decks.
   - title: Preview before syncing
     details: Validate offline, compare with Anki in a dry run, and adopt existing Yanki notes in place. Deletion is always explicit.
   - title: Made for the terminal
-    details: Run through uvx. Get useful errors, structured JSON, and an agent skill with help generated from the actual CLI.
+    details: Run through uvx. Preview changes, watch your edits, and export card-writing instructions for an agent.
 ---
 
-## A card is just a Markdown file
+## Start with a simple card
 
 ```markdown
 Frobenius norm
@@ -35,6 +35,9 @@ $$
 \|A\|_F = \sqrt{\sum_{i,j} a_{ij}^2}
 $$
 ```
+
+For several cards in one document, use [multi-card files](./guide/card-format.md#multiple-notes-per-file)
+with `question :: answer` lines and `##` heading sections.
 
 ## Try it without installing
 

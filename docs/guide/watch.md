@@ -23,24 +23,23 @@ are deliberately reserved for one-shot `sync` commands.
 
 ## What triggers a sync
 
-The watcher polls file contents every second. A burst of saves becomes a single
-sync after a half-second quiet period, checked at the polling interval. Content
-hashes detect changes even if a file's size and modification time stay the same.
+By default, watch checks for changes once a second and waits half a second
+after your last save before syncing. A burst of saves becomes one sync.
 
-Syncs run sequentially under the usual per-root lock. The watcher ignores its
-own `noteId` and legacy `loomId` cleanup writes and hidden paths such as
-`.ankiloom/` and `.git/`.
-Edits made while a sync is running are picked up afterward.
+Only one sync runs at a time for a card folder. Saving IDs during sync does
+not trigger another sync. Hidden files and folders, such as `.ankiloom/` and
+`.git/`, are ignored. Edits made while a sync is running are picked up afterward.
 
-Moving a card updates its deck. Deleting a file triggers a comparison but
-**never deletes its Anki note**. Stop watch and use an explicit `sync --prune`
-against the complete root if you want to remove missing notes from Anki.
+Moving a card to another folder updates its deck. Deleting a file or removing
+a section **never deletes its Anki note**. Stop watch and use an explicit
+`sync --prune` against the complete root if you want to remove missing notes
+from Anki.
 
 ## Errors and retries
 
 Connection failures and busy sync locks retry after ten seconds, without
-requiring another file edit. Each retry runs the full journaled sync operation,
-so a lost response after creating a note does not create a duplicate.
+requiring another file edit. Keep `.ankiloom/` in place so interrupted
+creations can be recovered without duplicate notes.
 
 Invalid Markdown, configuration errors, model mismatches and Anki-side edits
 are reported while watch keeps running. They wait for a file change, rather
@@ -59,8 +58,7 @@ ankiloom watch ./cards --interval 0.5 --debounce 1 --retry-delay 15
 ```
 
 A preview continuously compares with Anki but writes no notes, models, media,
-journal or source IDs. Timing options are measured in seconds. Polling works
-across platforms and does not require a filesystem watcher dependency.
+journal or source IDs. Timing options are measured in seconds.
 
 See the [generated reference](../reference/cli.md#ankiloom-watch) for all options,
 including `--deck`, `--exclude`, `--url` and `--timeout`.
