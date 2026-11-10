@@ -24,13 +24,13 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Validation works offline:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.4.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.5.0 ankiloom check ./cards
 ```
 
 Or install the CLI:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.4.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.5.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards

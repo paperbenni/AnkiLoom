@@ -61,7 +61,8 @@ def test_initial_sync_does_not_loop_on_own_ids_or_journal(monkeypatch, server, t
     events = run(monkeypatch, server, tmp_path)
     assert len(syncs(events)) == 1
     assert len(server[0].notes) == 1
-    assert "loomId:" in path.read_text() and "noteId:" in path.read_text()
+    source = path.read_text()
+    assert "noteId:" in source and "loomId:" not in source
     assert events[-1]["event"] == "stopped"
 
 
@@ -235,7 +236,7 @@ def test_dry_run_never_writes_ids_or_anki(monkeypatch, server, tmp_path):
     )
     assert len(syncs(events)) == 2 and all(e["dryRun"] for e in syncs(events))
     assert not server[0].notes and not server[0].models
-    assert "loomId:" not in path.read_text() and not (tmp_path / ".ankiloom").exists()
+    assert "noteId:" not in path.read_text() and not (tmp_path / ".ankiloom").exists()
 
 
 def test_json_cli_emits_events_and_ctrl_c_stops_cleanly(monkeypatch, server, tmp_path):

@@ -14,6 +14,10 @@ review history and unrelated tags/fields. It supports Yanki Basic, Reversed
 with Extra, Cloze and Type Answer models. It refuses a note type change instead
 of deleting and recreating cards. New notes use AnkiLoom models.
 
+Older AnkiLoom versions also wrote a `loomId` field and `ankiloom::id::…` tag.
+A normal sync removes them after confirming `noteId`, so no manual cleanup is
+needed.
+
 After adoption, use ordinary `ankiloom sync ./cards`. To keep existing card
 styling, no additional step is needed: adopted note templates and CSS stay in
 Anki. To apply a CSS file explicitly:

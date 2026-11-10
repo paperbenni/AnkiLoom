@@ -14,6 +14,8 @@
 - All input is validated and preflighted before applying note changes. Runtime
   failures can still leave a partially applied sync. Fix the error and rerun
   the same command: each note is journaled, and interrupted writes are recovered.
+  A create whose response was lost is recovered from the local journal and its
+  temporary Anki tag; once `noteId` is written, that recovery record is cleared.
 - A per-root lock prevents concurrent AnkiLoom syncs. AnkiConnect has no atomic
   compare-and-swap operation: avoid editing notes in Anki during sync.
 - AnkiWeb sync is off by default. Pass `--ankiweb` to request it after local sync.
@@ -24,19 +26,24 @@ sync tools on the same notes. On a new machine, preview with `--adopt` to
 establish a fresh baseline for the same Anki collection. A missing Anki note
 is reported rather than silently recreated.
 
+Only `noteId` is stored in Markdown, so it remains portable without the journal.
+The journal is needed for conflict baselines and for an in-flight create. If it
+is lost during an unfinished create, search Anki for an `ankiloom::create::…`
+tag and either restore the card file or remove the orphaned note manually.
+
 For fewer writes, unchanged notes skip note/media mutations. AnkiLoom copies
 media but never garbage-collects it; Anki's media tools handle that separately.
 There is no two-way merge or automatic conflict resolution.
 
 ## Read performance
 
-Preflight batches identity lookups with AnkiConnect's read-only `multi` action,
-then reads fields and card decks in bulk. Unchanged notes need no second read
+Preflight batches legacy identity and interrupted-creation lookups with
+AnkiConnect's read-only `multi` action, then reads fields and card decks in bulk. Unchanged notes need no second read
 during apply. Notes that will be modified are still rechecked immediately
 before writing and verified afterward; conflict detection stays active.
 
 On the 44-note development collection, this reduced an unchanged sync from
-223 HTTP requests and about 11.2 seconds to four requests and about 0.42 seconds,
-excluding CLI startup. Markdown parsing accounted for about 0.08 seconds.
+223 HTTP requests and about 11.2 seconds to three requests and about 0.4
+seconds, excluding CLI startup. Markdown parsing accounted for about 0.08 seconds.
 Reads are chunked for larger collections. Mutations remain individually
 journaled and are never retried at the HTTP request level.

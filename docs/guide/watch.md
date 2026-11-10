@@ -28,7 +28,8 @@ sync after a half-second quiet period, checked at the polling interval. Content
 hashes detect changes even if a file's size and modification time stay the same.
 
 Syncs run sequentially under the usual per-root lock. The watcher ignores its
-own `noteId` / `loomId` writes and hidden paths such as `.ankiloom/` and `.git/`.
+own `noteId` and legacy `loomId` cleanup writes and hidden paths such as
+`.ankiloom/` and `.git/`.
 Edits made while a sync is running are picked up afterward.
 
 Moving a card updates its deck. Deleting a file triggers a comparison but

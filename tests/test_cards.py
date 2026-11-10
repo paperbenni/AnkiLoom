@@ -105,9 +105,10 @@ def test_crlf_and_frontmatter_comments_survive(tmp_path):
     p.write_bytes(source.encode())
     c = parse_card(p, tmp_path)
     write_metadata(c, loomId="a" * 32)
-    write_metadata(c, noteId=123)
+    write_metadata(c, remove=("loomId",), noteId=123)
     actual = p.read_bytes().decode()
     assert "# comment\r\n" in actual and "custom: value\r\n" in actual
+    assert "loomId:" not in actual
     assert actual.endswith("---\r\n\r\nA\r\n\r\n---\r\n\r\nB\r\n")
     assert parse_card(p, tmp_path).note_id == 123
 

@@ -324,7 +324,7 @@ def watch(
 
     Watches cards, local assets and ankiloom.toml, respecting --exclude.
     Saves are debounced; syncs run sequentially under the usual root lock.
-    Own noteId/loomId writes and hidden files do not trigger another sync.
+    Own noteId and legacy loomId cleanup writes and hidden files do not trigger another sync.
 
     Conflicts and invalid cards are reported, then watch waits for an edit.
     Connection failures and busy locks retry through the journaled sync path.

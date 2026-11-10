@@ -7,8 +7,9 @@ description: Author one-file Markdown flashcards and sync them to Anki with Anki
 
 One Markdown file is one Anki note. Folders under the supplied card root become
 Anki deck levels. Optional YAML frontmatter contains `tags` (a list of strings).
-`/` in tags becomes `::`. Preserve `noteId` and `loomId`; the tool writes these.
-When copying a note to make a new one, remove both IDs from the copy.
+`/` in tags becomes `::`. Preserve `noteId`; the tool writes it. Older cards may
+also contain a legacy `loomId`, which sync removes automatically. When copying a
+note to make a new one, remove `noteId` from the copy.
 
 ## Card syntax
 
@@ -46,8 +47,11 @@ refused for pruning. Sync is local unless `--ankiweb` is passed.
 Keep `.ankiloom/` local and ignored by Git; it contains the lock and sync
 journal. Keep note IDs in version control with the Markdown. On a new machine,
 run a preview with `--adopt` to establish a fresh baseline against the same
-Anki collection. A successful create with a lost response recovers using the
-persisted `loomId`, so rerun the same command and do not remove IDs.
+Anki collection. A successful create with a lost response recovers from the
+temporary token in the journal and its Anki tag, so rerun the same command.
+Once `noteId` is written, that recovery record and tag are cleared. If the
+journal is lost during an unfinished creation, find the
+`ankiloom::create::…` tag in Anki and resolve that note manually.
 
 `watch ROOT` syncs immediately, then after file changes settle. It shares the
 sync journal and lock, ignores its own metadata writes, and catches changes

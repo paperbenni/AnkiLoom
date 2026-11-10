@@ -43,8 +43,15 @@ def sync_once(options: SyncOptions, *, progress: ProgressCallback = no_progress)
     def run() -> SyncResult:
         cards = scan(root, deck, exclude, progress=progress)
         state = State(root, url)
-        entries, removed = plan(
-            cards, client, state, options.adopt, options.force, options.prune, progress=progress
+        entries, removed, stale_creations = plan(
+            cards,
+            client,
+            state,
+            root,
+            options.adopt,
+            options.force,
+            options.prune,
+            progress=progress,
         )
         changes = [entry.report(root) for entry in entries]
         changes += [
@@ -57,7 +64,14 @@ def sync_once(options: SyncOptions, *, progress: ProgressCallback = no_progress)
             for r in removed
         ]
         if not options.dry_run:
-            apply(entries, removed, client, state, progress=progress)
+            apply(
+                entries,
+                removed,
+                client,
+                state,
+                stale_creations=stale_creations,
+                progress=progress,
+            )
             for change, entry in zip(changes, entries):
                 change["noteId"] = entry.card.note_id
             if options.ankiweb:

@@ -78,10 +78,17 @@ Answer
 Tags use a YAML list; `/` becomes Anki's `::`. Use block-style frontmatter keys
 as above, rather than a flow-style `{...}` mapping. Other metadata is preserved.
 
-AnkiLoom writes `loomId` (a retry-safe identity) and `noteId` (Anki's numeric ID).
-**Commit these with your cards.** Filenames can change without creating new notes.
-When copying a file to make a different note, remove **both** IDs from the copy.
-Duplicate IDs fail validation rather than silently targeting the same note.
+AnkiLoom writes `noteId` (Anki's numeric ID). **Commit it with your cards.**
+Filenames can change without creating new notes. When copying a file to make a
+different note, remove `noteId` from the copy. Duplicate noteIds fail validation
+rather than silently targeting the same note.
+
+Older AnkiLoom versions also wrote `loomId`. Sync removes that legacy field
+after confirming the note, so it is never required for new cards. Creation
+recovery uses a temporary token in the local journal plus an
+`ankiloom::create::…` Anki tag. Once `noteId` is safely written, both are
+cleared. Keep the journal local; if it is lost during an unfinished creation,
+find that tag in Anki and resolve the note manually before retrying.
 
 Folders below the supplied root become deck levels: `cards/maths/algebra/x.md`
 becomes `maths::algebra`. A file directly under the root uses the root's name.

@@ -26,7 +26,7 @@ def invoke(server, root, *global_options, json_output=False):
     return CliRunner().invoke(cli, args, color=True)
 
 
-def test_unchanged_sync_uses_four_requests_for_44_notes(monkeypatch, server, tmp_path):
+def test_unchanged_sync_uses_three_requests_for_44_notes(monkeypatch, server, tmp_path):
     for i in range(44):
         make(tmp_path, f"card-{i}.md")
     assert invoke(server, tmp_path, json_output=True).exit_code == 0
@@ -41,7 +41,7 @@ def test_unchanged_sync_uses_four_requests_for_44_notes(monkeypatch, server, tmp
     result = invoke(server, tmp_path, json_output=True)
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["summary"] == {"unchanged": 44}
-    assert calls == ["version", "multi", "notesInfo", "cardsInfo"]
+    assert calls == ["version", "notesInfo", "cardsInfo"]
 
 
 def test_recheck_before_write_still_blocks_concurrent_anki_edit(monkeypatch, server, tmp_path):

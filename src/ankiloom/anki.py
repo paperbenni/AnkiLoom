@@ -108,7 +108,7 @@ class AnkiConnect:
         if note_id not in notes:
             raise LoomError(
                 f"Anki note {note_id} no longer exists. Restore it from an Anki backup, "
-                "or remove noteId AND loomId from the Markdown to deliberately create a new note.",
+                "or remove noteId (and any legacy loomId) from the Markdown to deliberately create a new note.",
                 "missing",
             )
         return notes[note_id]
