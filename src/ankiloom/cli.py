@@ -449,10 +449,21 @@ def update(head, check_only, timeout, as_json):
     pipx and disposable/project environments get manual update instructions.
     --check works in any installation. No update checks run during other commands.
     """
-    with SyncDisplay(as_json=as_json) as display:
-        report = update_installation(
-            head=head, check=check_only, timeout=timeout, progress=display.update
-        )
+    try:
+        with SyncDisplay(as_json=as_json) as display:
+            report = update_installation(
+                head=head, check=check_only, timeout=timeout, progress=display.update
+            )
+    except KeyboardInterrupt:
+        error = {
+            "code": "interrupted",
+            "message": "Update interrupted. Run ankiloom --version to check the installation before retrying.",
+        }
+        if as_json:
+            click.echo(json.dumps({"ok": False, "error": error}))
+        else:
+            render_error(error)
+        raise click.exceptions.Exit(130) from None
     emit(report, as_json)
 
 

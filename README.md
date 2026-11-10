@@ -24,13 +24,13 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Validation works offline:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.3.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.4.0 ankiloom check ./cards
 ```
 
 Or install the CLI:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.3.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.4.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards
@@ -48,6 +48,18 @@ and `--skill` exports an agent skill with a live command reference. Rich help,
 live progress and concise summaries make terminal use readable. Use
 `ankiloom --verbose sync` for per-note details or `ankiloom --color always sync`
 to override color auto-detection.
+
+## Update
+
+```sh
+ankiloom update           # Latest published release
+ankiloom update --head    # Latest GitHub commit
+ankiloom update --check   # Check without installing
+```
+
+Automatic updates support permanent uv tool installations. See the
+[update guide](https://paperbenni.xyz/AnkiLoom/guide/updating.html) for installation
+detection, pinned versions and manual update instructions.
 
 ## Watch your cards
 

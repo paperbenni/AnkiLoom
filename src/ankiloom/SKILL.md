@@ -59,7 +59,8 @@ forced overwrites and pruning; watch does not expose those options.
 One-shot JSON is one object on stdout. Watch JSON is newline-delimited events
 with `event` equal to `watching`, `sync`, `error` or `stopped`; errors are
 nonfatal and can include `retryIn` in seconds (null means waiting for an edit). Exit codes: 0 success, 1 unexpected/general error,
-2 input/config/usage, 3 preflight/conflict/state, 4 AnkiConnect/API error,
+2 input/config/usage/unsupported installation, 3 preflight/conflict/state,
+4 AnkiConnect/API error, 5 update failure,
 130 interrupted. A failed apply may have completed earlier notes; fix the
 reported issue and rerun. Dry runs and checks never write source files or Anki.
 Use the generated reference below for the installed version's exact options.
@@ -71,3 +72,13 @@ and `--verbose`. Auto respects NO_COLOR; always overrides it. JSON disables
 presentation and progress regardless of global flags. Grouped preflight errors
 include all individual problems in `error.details`; verbose human output lists
 all affected paths. Generated command references are always plain text.
+
+
+`update` explicitly installs the latest stable GitHub release; `update --head`
+selects the latest default-branch commit. `update --check` is read-only and
+works in any installation. Updates delegate to uv only for permanent tool
+installs. Editable checkouts, pipx, project/disposable environments, forks and
+custom tool requirements get manual instructions rather than being replaced.
+No version checks run during other commands. JSON reports old/new versions and
+commits. An interrupted update exits 130; check the installed version before
+retrying. No update command reads or changes cards or Anki.

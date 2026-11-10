@@ -22,9 +22,10 @@ Successful responses include `ok: true`; failures include `ok: false` and
 | --- | --- |
 | 0 | Success, including a dry run with planned changes |
 | 1 | General/unexpected error |
-| 2 | Input, validation, configuration or CLI usage error |
+| 2 | Input, validation, configuration, installation or CLI usage error |
 | 3 | Preflight, conflict, identity, model or journal error |
 | 4 | AnkiConnect connection or API error |
+| 5 | GitHub update check, installer or verification failure |
 | 130 | Interrupted |
 
 
