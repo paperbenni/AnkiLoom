@@ -258,3 +258,14 @@ def test_manager_detection_does_not_confuse_uvx_or_editable_with_tools(
         lambda args, **kwargs: subprocess.CompletedProcess(args, 0, str(tools), ""),
     )
     assert updater.detect_installation().kind == expected
+
+
+def test_interrupted_update_has_specific_structured_advice(managed, monkeypatch):
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(updater, "run_process", interrupted)
+    result = CliRunner().invoke(cli, ["update", "--json"])
+    assert result.exit_code == 130
+    error = json.loads(result.stdout)["error"]
+    assert error["code"] == "interrupted" and "ankiloom --version" in error["message"]
