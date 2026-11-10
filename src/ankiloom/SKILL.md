@@ -1,0 +1,56 @@
+---
+name: ankiloom
+description: Author one-file Markdown flashcards and sync them to Anki with AnkiLoom, including migration from Yanki and conflict recovery.
+---
+
+# AnkiLoom
+
+One Markdown file is one Anki note. Folders under the supplied card root become
+Anki deck levels. Optional YAML frontmatter contains `tags` (a list of strings).
+`/` in tags becomes `::`. Preserve `noteId` and `loomId`; the tool writes these.
+When copying a note to make a new one, remove both IDs from the copy.
+
+## Card syntax
+
+- Basic: prompt, blank line, `---`, blank line, answer.
+- Reversed: prompt, two consecutive `---` rules separated by blank lines,
+  answer. An optional third rule introduces extra answer-side information.
+- Cloze: `~~answer~~` in the prompt; `~~1 answer~~` groups explicit numbers.
+  A final emphasis inside a cloze gives a hint: `~~Paris _city_~~`.
+  An optional horizontal rule separates back-side information.
+- Type answer: prompt followed by a final `_plain answer_`, without a rule.
+
+Code fences do not supply card separators or cloze syntax. Tables, code,
+HTML and `$inline$` / `$$display$$` math work. Local Markdown images and
+`![[relative/image.png|900]]` wiki embeds are copied to Anki with content-hashed
+names. Local audio embeds become Anki sounds. Paths resolve relative to the
+note and must remain inside the card root. Remote images stay remote.
+
+## Sync and migration
+
+Use `check ROOT` for offline validation. Use `sync ROOT --dry-run --json` to
+inspect the actual Anki plan. Anki desktop with AnkiConnect must be running.
+Use `--adopt` for existing compatible Yanki notes: updates preserve note IDs,
+models, card IDs and review history. Stop Yanki sync for those notes afterward.
+AnkiLoom refuses note type changes rather than silently recreating cards.
+
+Markdown supplies content; Anki supplies scheduling. Anki-side content, tag,
+or deck edits detected against the local journal block sync. Copy wanted edits
+to Markdown first; `--force` explicitly permits replacing the Anki version.
+Do not use force as a generic retry. Ordinary retries recover interrupted writes.
+
+Missing files do not delete notes. `--prune` is explicit and uses the complete
+original card root; excluded notes also count as missing. An empty root is
+refused for pruning. Sync is local unless `--ankiweb` is passed.
+
+Keep `.ankiloom/` local and ignored by Git; it contains the lock and sync
+journal. Keep note IDs in version control with the Markdown. On a new machine,
+run a preview with `--adopt` to establish a fresh baseline against the same
+Anki collection. A successful create with a lost response recovers using the
+persisted `loomId`, so rerun the same command and do not remove IDs.
+
+JSON is one object on stdout. Exit codes: 0 success, 1 unexpected/general error,
+2 input/config/usage, 3 preflight/conflict/state, 4 AnkiConnect/API error,
+130 interrupted. A failed apply may have completed earlier notes; fix the
+reported issue and rerun. Dry runs and checks never write source files or Anki.
+Use the generated reference below for the installed version's exact options.

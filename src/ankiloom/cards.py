@@ -1,15 +1,15 @@
 """Parse one Markdown file per note. Structural decisions use Markdown tokens."""
 
-from dataclasses import dataclass, field
 import hashlib
 import html
-from pathlib import Path
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+import yaml
 from markdown_it import MarkdownIt
 from mdit_py_plugins.dollarmath import dollarmath_plugin
-import yaml
 
 from .errors import LoomError
 
@@ -30,10 +30,15 @@ YANKI_MODELS = {
 def markdown():
     md = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
     md.use(dollarmath_plugin)
-    md.add_render_rule("math_inline", lambda self, ts, i, opts, env: (
-        r"\(" + html.escape(ts[i].content) + r"\)"))
-    md.add_render_rule("math_block", lambda self, ts, i, opts, env: (
-        '<div class="math">' + r"\[" + html.escape(ts[i].content) + r"\]" + '</div>'))
+    md.add_render_rule(
+        "math_inline", lambda self, ts, i, opts, env: r"\(" + html.escape(ts[i].content) + r"\)"
+    )
+    md.add_render_rule(
+        "math_block",
+        lambda self, ts, i, opts, env: (
+            '<div class="math">' + r"\[" + html.escape(ts[i].content) + r"\]" + "</div>"
+        ),
+    )
     return md
 
 
@@ -64,7 +69,7 @@ def frontmatter(source: str):
         raise LoomError(f"Invalid YAML frontmatter: {exc}", "parse") from exc
     if not isinstance(meta, dict):
         raise LoomError("Frontmatter must be a mapping of keys to values.", "parse")
-    return meta, "".join(lines[end + 1:]), end + 1
+    return meta, "".join(lines[end + 1 :]), end + 1
 
 
 @dataclass
@@ -83,7 +88,7 @@ class Card:
         return self.meta.get("noteId")
 
 
-def render(text: str, card: Card, root: Path):
+def render(text: str, card: Card, root: Path, parsed_tokens=None):
     md = markdown()
 
     def asset(src):
@@ -109,7 +114,11 @@ def render(text: str, card: Card, root: Path):
                 src = token.attrGet("src") or ""
                 target = asset(src)
                 if Path(urlparse(src).path).suffix.lower() in {".mp3", ".wav", ".ogg", ".m4a"}:
-                    token.type, token.content, token.children = "html_inline", f"[sound:{target}]", None
+                    token.type, token.content, token.children = (
+                        "html_inline",
+                        f"[sound:{target}]",
+                        None,
+                    )
                 else:
                     token.attrSet("src", target)
             if token.children:
@@ -121,9 +130,10 @@ def render(text: str, card: Card, root: Path):
                     parts = re.split(r"(!\[\[[^\]\n]+\]\])", child.content)
                     for part in parts:
                         from markdown_it.token import Token
+
                         new = Token("text", "", 0)
                         new.content = part
-                        if part.startswith("![[") and part.endswith("]]" ):
+                        if part.startswith("![[") and part.endswith("]]"):
                             bits = part[3:-2].split("|")
                             target = asset(bits[0])
                             size = bits[1] if len(bits) > 1 else ""
@@ -139,27 +149,33 @@ def render(text: str, card: Card, root: Path):
                             if Path(bits[0]).suffix.lower() in {".mp3", ".wav", ".ogg", ".m4a"}:
                                 new.content = f"[sound:{target}]"
                             else:
-                                new.content = f'<img src="{html.escape(target, quote=True)}"{attrs} alt="">'
+                                new.content = (
+                                    f'<img src="{html.escape(target, quote=True)}"{attrs} alt="">'
+                                )
                         children.append(new)
                 token.children = children
                 rewrite(token.children)
 
-    tokens = md.parse(text)
+    tokens = md.parse(text) if parsed_tokens is None else parsed_tokens
     rewrite(tokens)
-    return '<div class="ankiloom yanki">' + md.renderer.render(tokens, md.options, {}) + '</div>'
+    return '<div class="ankiloom yanki">' + md.renderer.render(tokens, md.options, {}) + "</div>"
 
 
 def parse_card(path: Path, root: Path, deck_prefix: str = ""):
-    source = path.read_text(encoding="utf-8")
+    source = path.read_bytes().decode("utf-8")
     meta, body, _ = frontmatter(source)
     note_id = meta.get("noteId")
     if note_id is not None and (type(note_id) is not int or note_id <= 0):
         raise LoomError("noteId must be a positive integer; omit it for new notes.", "parse")
     loom_id = meta.get("loomId")
-    if loom_id is not None and (not isinstance(loom_id, str) or not re.fullmatch(r"[0-9a-f]{32}", loom_id)):
+    if loom_id is not None and (
+        not isinstance(loom_id, str) or not re.fullmatch(r"[0-9a-f]{32}", loom_id)
+    ):
         raise LoomError("loomId must be an AnkiLoom-generated 32-character hex ID.", "parse")
     tags = meta.get("tags", [])
-    if not isinstance(tags, list) or any(not isinstance(t, str) or not t or re.search(r"\s", t) for t in tags):
+    if not isinstance(tags, list) or any(
+        not isinstance(t, str) or not t or re.search(r"\s", t) for t in tags
+    ):
         raise LoomError("tags must be a YAML list of nonempty strings without whitespace.", "parse")
     if any(t.startswith("ankiloom::") for t in tags):
         raise LoomError("The ankiloom:: tag prefix is reserved for sync identities.", "parse")
@@ -172,26 +188,29 @@ def parse_card(path: Path, root: Path, deck_prefix: str = ""):
     lines = body.splitlines(keepends=True)
     first = rules[0].map[0] if rules else len(lines)
     front = "".join(lines[:first])
-    back = "".join(lines[rules[0].map[1]:]) if rules else ""
+    back = "".join(lines[rules[0].map[1] :]) if rules else ""
     front_tokens = md.parse(front)
     clozes = [t for block in front_tokens for t in (block.children or []) if t.type == "s_open"]
     extra = ""
+    converted = None
     if clozes:
         card.kind = "cloze"
         counter = 0
+
         def cloze_renderer(self, ts, idx, opts, env):
             nonlocal counter
             counter += 1
             # Explicit numbering is consumed from the following text token.
             n = counter
             if idx + 1 < len(ts) and ts[idx + 1].type == "text":
-                match = re.match(r"(\d{1,2}) (.*)", ts[idx + 1].content, re.S)
+                match = re.match(r"(\d{1,2}) (.*)", ts[idx + 1].content, re.DOTALL)
                 if match:
                     n = int(match[1])
                     if n < 1:
                         raise LoomError("Cloze numbers start at 1.", "parse")
                     ts[idx + 1].content = match[2]
             return "{{c" + str(n) + "::"
+
         # Convert via tokens to leave code/math untouched. Hints use final emphasis.
         converted = md.parse(front)
         for block in converted:
@@ -204,32 +223,41 @@ def parse_card(path: Path, root: Path, deck_prefix: str = ""):
                     token.type, token.content = "html_inline", "}}"
                 elif token.type == "em_open":
                     # Only an emphasis immediately before a closing cloze is a hint.
-                    close = next((j for j in range(i + 1, len(children)) if children[j].type == "em_close"), None)
-                    if close is not None and close + 1 < len(children) and children[close + 1].type == "s_close":
+                    close = next(
+                        (j for j in range(i + 1, len(children)) if children[j].type == "em_close"),
+                        None,
+                    )
+                    if (
+                        close is not None
+                        and close + 1 < len(children)
+                        and children[close + 1].type == "s_close"
+                    ):
                         token.type, token.content = "html_inline", "::"
                         children[close].type, children[close].content = "html_inline", ""
-        front = md.renderer.render(converted, md.options, {})
-    elif len(rules) >= 2 and not "".join(lines[rules[0].map[1]:rules[1].map[0]]).strip():
+    elif len(rules) >= 2 and not "".join(lines[rules[0].map[1] : rules[1].map[0]]).strip():
         card.kind = "reverse"
         start = rules[1].map[1]
         end = rules[2].map[0] if len(rules) > 2 else len(lines)
         back = "".join(lines[start:end])
-        extra = "".join(lines[rules[2].map[1]:]) if len(rules) > 2 else ""
+        extra = "".join(lines[rules[2].map[1] :]) if len(rules) > 2 else ""
     elif not rules:
         inline = [t for block in tokens for t in (block.children or [])]
         if inline and inline[-1].type == "em_close":
             # Locate the final emphasis by token source-independent rendered children.
             opening = max((i for i, t in enumerate(inline) if t.type == "em_open"), default=-1)
-            if opening >= 0 and all(t.type == "text" for t in inline[opening + 1:-1]):
-                answer = "".join(t.content for t in inline[opening + 1:-1])
+            if opening >= 0 and all(t.type == "text" for t in inline[opening + 1 : -1]):
+                answer = "".join(t.content for t in inline[opening + 1 : -1])
                 match = re.search(r"([*_])([^\n]*?)\1\s*$", body)
                 if match and answer:
-                    card.kind, front, back = "type", body[:match.start()], answer
+                    card.kind, front, back = "type", body[: match.start()], answer
         if card.kind == "basic":
-            raise LoomError("Expected a front/back separator (blank line, ---, blank line), a cloze, or a final _typed answer_.", "parse")
+            raise LoomError(
+                "Expected a front/back separator (blank line, ---, blank line), a cloze, or a final _typed answer_.",
+                "parse",
+            )
     if not front.strip() or (card.kind != "cloze" and not back.strip()):
         raise LoomError("The prompt and answer must both contain content.", "parse")
-    card.fields = {"Front": render(front, card, root), "Back": render(back, card, root)}
+    card.fields = {"Front": render(front, card, root, converted), "Back": render(back, card, root)}
     if card.kind == "reverse":
         card.fields["Extra"] = render(extra, card, root)
     return card
@@ -248,10 +276,15 @@ def scan(root: Path, deck_prefix="", excludes=()):
             if path.is_symlink() or not path.resolve().is_relative_to(root):
                 raise LoomError("Symlinked cards are unsupported; use ordinary files.", "input")
             card = parse_card(path, root, deck_prefix)
-            for value, seen, label in [(card.note_id, ids, "noteId"), (card.meta.get("loomId"), loom_ids, "loomId")]:
+            for value, seen, label in [
+                (card.note_id, ids, "noteId"),
+                (card.meta.get("loomId"), loom_ids, "loomId"),
+            ]:
                 if value is not None:
                     if value in seen:
-                        raise LoomError(f"Duplicate {label} {value}; also used in {seen[value]}", "duplicate")
+                        raise LoomError(
+                            f"Duplicate {label} {value}; also used in {seen[value]}", "duplicate"
+                        )
                     seen[value] = rel.as_posix()
             cards.append(card)
         except (LoomError, UnicodeError, OSError) as exc:
