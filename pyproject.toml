@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ankiloom"
+version = "0.1.0"
+description = "Weave Markdown flashcards into Anki, without Obsidian or regex configuration."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "paperbenni"}]
+dependencies = ["click>=8.1,<9", "markdown-it-py>=3,<5", "mdit-py-plugins>=0.4,<1", "PyYAML>=6,<7", "filelock>=3.16,<4"]
+
+[project.scripts]
+ankiloom = "ankiloom.cli:main"
+
+[project.urls]
+Repository = "https://github.com/paperbenni/AnkiLoom"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.9"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
