@@ -2,6 +2,10 @@
 default:
     @just --list
 
+# Install the current checkout as a uv tool, replacing any installed version.
+install:
+    uv tool install --force .
+
 # Check lint, formatting, and types without modifying files.
 check:
     uv run ruff check .

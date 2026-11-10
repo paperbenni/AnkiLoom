@@ -83,6 +83,9 @@ uv build
 `just check` runs Ruff lint/format checks and ty. Tests use temporary Anki
 collections and never touch your real profile.
 
+Run `just install` to install the current checkout as the `ankiloom` command
+using uv tools, replacing any installed version. Rerun it after local changes.
+
 For the VitePress docs (Node.js 22 or newer):
 
 ```sh
