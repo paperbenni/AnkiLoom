@@ -117,3 +117,13 @@ def test_detect_edit_before_metadata_write(tmp_path):
     c.path.write_text("changed")
     with pytest.raises(LoomError, match="changed during sync"):
         write_metadata(c, noteId=123)
+
+
+def test_recursive_root_relative_excludes(tmp_path):
+    (tmp_path / "drafts" / "nested").mkdir(parents=True)
+    (tmp_path / "drafts" / "nested" / "bad.md").write_text("not a card")
+    (tmp_path / "drafts" / "bad.md").write_text("not a card")
+    (tmp_path / "good.md").write_text("Q\n\n---\n\nA")
+    assert len(scan(tmp_path, excludes=("drafts/**",))) == 1
+    with pytest.raises(LoomError, match="relative to the card root"):
+        scan(tmp_path, excludes=("../outside",))

@@ -222,3 +222,48 @@ def test_corrupt_journal_has_actionable_error(server, tmp_path):
     (tmp_path / ".ankiloom" / "state.json").write_text('{"version": 1, "notes": {"123": {}}}')
     result = invoke(server, tmp_path)
     assert result.exit_code == 3 and "Invalid sync journal" in result.output
+
+
+def test_unwritable_metadata_fails_before_any_anki_writes(server, tmp_path):
+    collection, _ = server
+    make(tmp_path, "a.md")
+    path = make(tmp_path, "z.md")
+    path.write_text("---\n{tags: [test]}\n---\nQ\n\n---\n\nA")
+    result = invoke(server, tmp_path)
+    assert result.exit_code == 3 and "block-style YAML" in result.output
+    assert not collection.notes and "loomId" not in (tmp_path / "a.md").read_text()
+
+
+def test_recovered_update_finalizes_pending_journal(server, tmp_path):
+    collection, _ = server
+    path = make(tmp_path, note_id=collection.note())
+    assert invoke(server, tmp_path, "--adopt").exit_code == 0
+    path.write_text(path.read_text().replace("topic", "second"))
+    collection.fail_after = "addTags"
+    assert invoke(server, tmp_path).exit_code == 4
+    assert invoke(server, tmp_path).exit_code == 0
+    state = json.loads((tmp_path / ".ankiloom" / "state.json").read_text())
+    record = next(iter(state["notes"].values()))
+    assert "pending" not in record and record["sourceTags"] == ["second"]
+    path.write_text(path.read_text().replace("second", "third"))
+    assert invoke(server, tmp_path).exit_code == 0
+    tags = next(iter(collection.notes.values()))["tags"]
+    assert "third" in tags and "second" not in tags
+
+
+def test_missing_numeric_id_is_recovered_from_loom_id(server, tmp_path):
+    collection, _ = server
+    path = make(tmp_path)
+    assert invoke(server, tmp_path).exit_code == 0
+    path.write_text(
+        "\n".join(line for line in path.read_text().splitlines() if not line.startswith("noteId:"))
+    )
+    assert invoke(server, tmp_path).exit_code == 0
+    assert "noteId:" in path.read_text() and len(collection.notes) == 1
+
+
+def test_dry_run_create_does_not_create_local_state(server, tmp_path):
+    make(tmp_path)
+    assert invoke(server, tmp_path, "--dry-run").exit_code == 0
+    assert not (tmp_path / ".ankiloom").exists()
+    assert not server[0].notes and not server[0].models

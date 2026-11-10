@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from .cards import MODELS, YANKI_MODELS
 from .errors import LoomError
-from .storage import write_metadata
+from .storage import metadata_source, write_metadata
 
 MANAGED = "ankiloom::managed"
 CSS = """.card {font-family: system-ui, sans-serif; font-size: 20px; text-align: left;}
@@ -50,7 +50,12 @@ def snapshot(note):
 
 def compatible_partial(remote, before, target):
     """Accept only an interrupted write's old/new values, including deck/tag steps."""
-    if remote["model"] != before["model"] or remote["cards"] != before["cards"]:
+    if remote["model"] != before["model"]:
+        return False
+    if remote["cards"] != before["cards"] and not (
+        remote["model"] in (MODELS["cloze"], YANKI_MODELS["cloze"])
+        and set(before["cards"]).issubset(remote["cards"])
+    ):
         return False
     for key, value in remote["fields"].items():
         if value not in (before["fields"].get(key), target["fields"].get(key)):
@@ -79,6 +84,17 @@ class Entry:
             "noteId": self.remote["id"] if self.remote else None,
             "deck": self.card.deck,
             "kind": self.card.kind,
+            "fieldsChanged": [
+                key
+                for key, value in self.card.fields.items()
+                if not self.remote or self.remote["fields"].get(key) != value
+            ],
+            "tagsAdded": sorted(
+                set(self.target["tags"]) - set(self.remote["tags"] if self.remote else [])
+            ),
+            "tagsRemoved": sorted(
+                set(self.remote["tags"] if self.remote else []) - set(self.target["tags"])
+            ),
         }
 
 
@@ -88,6 +104,7 @@ def plan(cards, client, state, adopt=False, force=False, prune=False):
     for card in cards:
         try:
             loom_id = card.meta.get("loomId") or uuid.uuid4().hex
+            metadata_source(card, loomId=loom_id, noteId=card.note_id or 1)
             identity = "ankiloom::id::" + loom_id
             matches = (
                 client.call("findNotes", query=f"tag:{identity}") if card.meta.get("loomId") else []
@@ -142,7 +159,13 @@ def plan(cards, client, state, adopt=False, force=False, prune=False):
                     raise LoomError("This Anki note already belongs to another loomId.", "conflict")
                 target = {**current, "fields": fields, "tags": sorted(tags), "decks": [card.deck]}
                 action = (
-                    "adopt" if not baseline else ("unchanged" if current == target else "update")
+                    "adopt"
+                    if not baseline
+                    else (
+                        "unchanged"
+                        if current == target and not baseline.get("pending")
+                        else "update"
+                    )
                 )
             else:
                 target = {
@@ -155,6 +178,8 @@ def plan(cards, client, state, adopt=False, force=False, prune=False):
                 action = "create"
             entries.append(Entry(card, action, remote, target, loom_id))
         except LoomError as exc:
+            if exc.code in {"connection", "anki"}:
+                raise
             problems.append(f"{card.path}: {exc}")
     available = client.call("modelNames")
     for kind in {e.card.kind for e in entries if e.action == "create"}:
@@ -231,6 +256,8 @@ def apply(entries, removed, client, state):
         if remote and snapshot(client.note(remote["id"])) != snapshot(remote):
             raise LoomError(f"Anki note {remote['id']} changed during sync; rerun.", "conflict")
         if entry.action == "unchanged":
+            if card.note_id != remote["id"]:
+                write_metadata(card, noteId=remote["id"])
             continue
         if not card.meta.get("loomId"):
             write_metadata(card, loomId=entry.loom_id)

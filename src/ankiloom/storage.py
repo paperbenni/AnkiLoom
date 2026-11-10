@@ -14,7 +14,7 @@ def atomic_write(path: Path, text: str):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
-        if path.exists():
+        if path.exists() and hasattr(os, "fchmod"):
             os.fchmod(fd, path.stat().st_mode & 0o777)
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as stream:
             stream.write(text)
@@ -32,13 +32,8 @@ def atomic_write(path: Path, text: str):
             os.unlink(name)
 
 
-def write_metadata(card, **values):
-    # Preserve comments, formatting, unknown frontmatter and the exact card body.
-    current = card.path.read_bytes().decode("utf-8")
-    if current != card.source:
-        raise LoomError(
-            f"{card.path}: file changed during sync; rerun with the latest content.", "conflict"
-        )
+def metadata_source(card, **values):
+    current = card.source
     _, _, end = frontmatter(current)
     newline = "\r\n" if "\r\n" in current else "\n"
     lines = current.splitlines(keepends=True)
@@ -59,6 +54,28 @@ def write_metadata(card, **values):
                 )
             head += f"{key}: {value}" + newline
     source = head + tail
+    try:
+        updated, _, _ = frontmatter(source)
+    except LoomError as exc:
+        raise LoomError(
+            "Cannot insert sync IDs into this frontmatter. Use block-style YAML with each key on its own line.",
+            "parse",
+        ) from exc
+    if any(updated.get(key) != value for key, value in values.items()):
+        raise LoomError(
+            "Cannot insert sync IDs into this frontmatter; use simple block-style YAML keys.",
+            "parse",
+        )
+    return source
+
+
+def write_metadata(card, **values):
+    # Preserve comments, formatting, unknown frontmatter and the exact card body.
+    if card.path.read_bytes().decode("utf-8") != card.source:
+        raise LoomError(
+            f"{card.path}: file changed during sync; rerun with the latest content.", "conflict"
+        )
+    source = metadata_source(card, **values)
     atomic_write(card.path, source)
     card.source = source
     card.meta.update(values)

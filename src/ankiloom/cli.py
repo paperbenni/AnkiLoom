@@ -291,6 +291,9 @@ def sync(root, deck, exclude, url, timeout, dry_run, adopt, force, prune, ankiwe
             raise LoomError(f"Card root is not a directory: {root}", "input")
         directory = root / ".ankiloom"
         directory.mkdir(exist_ok=True)
+        ignore = directory / ".gitignore"
+        if not ignore.exists():
+            ignore.write_text("*\n", encoding="utf-8")
         with FileLock(directory / "sync.lock", timeout=0):
             run()
 

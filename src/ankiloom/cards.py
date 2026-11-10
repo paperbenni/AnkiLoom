@@ -65,7 +65,7 @@ def frontmatter(source: str):
 
         UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, mapping)
         meta = yaml.load("".join(lines[1:end]), Loader=UniqueLoader) or {}
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, TypeError) as exc:
         raise LoomError(f"Invalid YAML frontmatter: {exc}", "parse") from exc
     if not isinstance(meta, dict):
         raise LoomError("Frontmatter must be a mapping of keys to values.", "parse")
@@ -177,7 +177,7 @@ def parse_card(path: Path, root: Path, deck_prefix: str = ""):
         not isinstance(t, str) or not t or re.search(r"\s", t) for t in tags
     ):
         raise LoomError("tags must be a YAML list of nonempty strings without whitespace.", "parse")
-    if any(t.startswith("ankiloom::") for t in tags):
+    if any(t.lower().startswith("ankiloom::") for t in tags):
         raise LoomError("The ankiloom:: tag prefix is reserved for sync identities.", "parse")
     parts = list(path.relative_to(root).parent.parts)
     deck = "::".join(([deck_prefix] if deck_prefix else []) + parts) or root.name
@@ -267,10 +267,21 @@ def scan(root: Path, deck_prefix="", excludes=()):
     root = root.resolve()
     if not root.is_dir():
         raise LoomError(f"Card root is not a directory: {root}", "input")
+    excluded_paths = set()
+    for pattern in excludes:
+        if not pattern or Path(pattern).is_absolute() or ".." in Path(pattern).parts:
+            raise LoomError(
+                f"Exclude pattern must be relative to the card root: {pattern!r}", "config"
+            )
+        excluded_paths.update(root.glob(pattern))
     cards, errors, ids, loom_ids = [], [], {}, {}
     for path in sorted(root.rglob("*.md")):
         rel = path.relative_to(root)
-        if any(p.startswith(".") for p in rel.parts) or any(rel.match(p) for p in excludes):
+        if (
+            any(p.startswith(".") for p in rel.parts)
+            or path in excluded_paths
+            or any(parent in excluded_paths for parent in path.parents)
+        ):
             continue
         try:
             if path.is_symlink() or not path.resolve().is_relative_to(root):
