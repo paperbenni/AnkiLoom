@@ -5,3 +5,10 @@ __pycache__/
 .ruff_cache/
 dist/
 .ankiloom/
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+# Built from the CLI definitions; never maintain these by hand.
+docs/reference/cli.md
+docs/reference/skill.md
+docs/public/SKILL.md

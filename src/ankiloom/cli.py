@@ -84,6 +84,12 @@ def skill_text():
 
     text = files("ankiloom").joinpath("SKILL.md").read_text()
     text += "\n## Installed command reference\n\nGenerated from this version's actual CLI definitions.\n"
+    return text + command_reference()
+
+
+def command_reference() -> str:
+    """Render the command definitions for both the agent skill and website."""
+    text = ""
     context = click.Context(cli, info_name="ankiloom")
     for name, command in [
         ("ankiloom", cli),
