@@ -9,6 +9,7 @@ from filelock import FileLock
 from .cards import scan
 from .configuration import client_for, config
 from .errors import LoomError
+from .progress import ProgressCallback, ProgressUpdate, no_progress
 from .storage import State
 from .sync import apply, plan
 
@@ -33,15 +34,18 @@ class SyncResult:
     sources: dict[Path, str]
 
 
-def sync_once(options: SyncOptions) -> SyncResult:
+def sync_once(options: SyncOptions, *, progress: ProgressCallback = no_progress) -> SyncResult:
+    progress(ProgressUpdate("Reading settings"))
     root = options.root.resolve()
     deck, exclude, url = config(root, options.deck, options.exclude, options.url)
     client = client_for(url, options.timeout)
 
     def run() -> SyncResult:
-        cards = scan(root, deck, exclude)
+        cards = scan(root, deck, exclude, progress=progress)
         state = State(root, url)
-        entries, removed = plan(cards, client, state, options.adopt, options.force, options.prune)
+        entries, removed = plan(
+            cards, client, state, options.adopt, options.force, options.prune, progress=progress
+        )
         changes = [entry.report(root) for entry in entries]
         changes += [
             {
@@ -53,10 +57,11 @@ def sync_once(options: SyncOptions) -> SyncResult:
             for r in removed
         ]
         if not options.dry_run:
-            apply(entries, removed, client, state)
+            apply(entries, removed, client, state, progress=progress)
             for change, entry in zip(changes, entries):
                 change["noteId"] = entry.card.note_id
             if options.ankiweb:
+                progress(ProgressUpdate("Syncing AnkiWeb"))
                 client.call("sync")
         return SyncResult(
             report={

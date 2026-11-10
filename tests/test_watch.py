@@ -126,9 +126,9 @@ def test_edits_during_sync_are_not_swallowed(monkeypatch, server, tmp_path):
     real_sync = watch_module.sync_once
     first = True
 
-    def editing_sync(options):
+    def editing_sync(options, **kwargs):
         nonlocal first
-        result = real_sync(options)
+        result = real_sync(options, **kwargs)
         if first:
             first = False
             path.write_text(path.read_text().replace("Answer", "Edited during sync"))

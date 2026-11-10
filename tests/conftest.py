@@ -35,6 +35,11 @@ class Collection:
 
     def action(self, action, p):
         self.calls.append(action)
+        if action == "multi":
+            return [
+                {"result": self.action(a["action"], a.get("params", {})), "error": None}
+                for a in p["actions"]
+            ]
         if action == "version":
             return 6
         if action == "findNotes":

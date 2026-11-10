@@ -11,6 +11,7 @@ from filelock import Timeout
 from .cards import visible_files
 from .configuration import config
 from .errors import LoomError, operation_error
+from .progress import ProgressCallback, no_progress
 from .service import SyncOptions, sync_once
 
 
@@ -47,6 +48,7 @@ def watch_folder(
     interval: float = 1.0,
     debounce: float = 0.5,
     retry_delay: float = 10.0,
+    progress: ProgressCallback = no_progress,
 ) -> None:
     root = options.root.resolve()
     if not root.is_dir():
@@ -65,7 +67,7 @@ def watch_folder(
             if trigger:
                 observed = tree_snapshot(options)
                 try:
-                    result = sync_once(options)
+                    result = sync_once(options, progress=progress)
                 except (LoomError, OSError, Timeout) as exc:
                     error = operation_error(exc)
                     recoverable = error.code == "connection" or isinstance(exc, Timeout)
@@ -77,7 +79,7 @@ def watch_folder(
                             "event": "error",
                             "trigger": trigger,
                             "retryIn": retry_delay if recoverable else None,
-                            "error": {"code": error.code, "message": str(error)},
+                            "error": error.as_dict(),
                         }
                     )
                 else:

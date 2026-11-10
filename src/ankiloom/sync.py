@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .cards import MODELS, YANKI_MODELS, Card
-from .errors import LoomError
+from .errors import LoomError, PreflightError
+from .progress import ProgressCallback, ProgressUpdate, no_progress
 from .storage import metadata_source, write_metadata
 
 MANAGED = "ankiloom::managed"
@@ -99,17 +100,34 @@ class Entry:
         }
 
 
-def plan(cards, client, state, adopt=False, force=False, prune=False):
+def plan(
+    cards,
+    client,
+    state,
+    adopt=False,
+    force=False,
+    prune=False,
+    *,
+    progress: ProgressCallback = no_progress,
+):
+    progress(ProgressUpdate("Connecting to Anki"))
     client.connect()
+    progress(ProgressUpdate("Looking up note identities", total=len(cards)))
+    identities = ["ankiloom::id::" + c.meta["loomId"] for c in cards if c.meta.get("loomId")]
+    identity_matches = client.find_identities(identities)
+    note_ids = {c.note_id for c in cards if c.note_id}
+    note_ids.update(note_id for matches in identity_matches.values() for note_id in matches)
+    progress(ProgressUpdate("Reading Anki notes", total=len(note_ids)))
+    remote_notes = client.notes(list(note_ids))
+    progress(ProgressUpdate("Reading Anki notes", len(note_ids), len(note_ids)))
     entries, problems, used = [], [], set()
-    for card in cards:
+    for index, card in enumerate(cards):
+        progress(ProgressUpdate("Checking notes", index, len(cards), card.path.name))
         try:
             loom_id = card.meta.get("loomId") or uuid.uuid4().hex
             metadata_source(card, loomId=loom_id, noteId=card.note_id or 1)
             identity = "ankiloom::id::" + loom_id
-            matches = (
-                client.call("findNotes", query=f"tag:{identity}") if card.meta.get("loomId") else []
-            )
+            matches = identity_matches.get(identity, [])
             if len(matches) > 1:
                 raise LoomError(
                     f"Multiple Anki notes have identity {loom_id}; resolve the duplicates in Anki.",
@@ -122,7 +140,7 @@ def plan(cards, client, state, adopt=False, force=False, prune=False):
                 raise LoomError(f"Another file resolves to Anki note {note_id}.", "duplicate")
             if note_id:
                 used.add(note_id)
-            remote = client.note(note_id) if note_id else None
+            remote = client.require_note(remote_notes, note_id) if note_id else None
             baseline = state.notes.get(str(note_id)) if note_id else None
             if remote:
                 if remote["model"] not in (MODELS[card.kind], YANKI_MODELS[card.kind]):
@@ -181,17 +199,23 @@ def plan(cards, client, state, adopt=False, force=False, prune=False):
         except LoomError as exc:
             if exc.code in {"connection", "anki"}:
                 raise
-            problems.append(f"{card.path}: {exc}")
-    available = client.call("modelNames")
-    for kind in {e.card.kind for e in entries if e.action == "create"}:
+            problems.append({"path": str(card.path), "message": str(exc), "code": exc.code})
+    progress(ProgressUpdate("Checking notes", len(cards), len(cards)))
+    new_kinds = {e.card.kind for e in entries if e.action == "create"}
+    available = client.call("modelNames") if new_kinds else []
+    for kind in new_kinds:
         if MODELS[kind] in available:
             expected = ["Front", "Back"] + (["Extra"] if kind == "reverse" else [])
             if client.call("modelFieldNames", modelName=MODELS[kind]) != expected:
                 problems.append(
-                    f"Model {MODELS[kind]} has incompatible fields; restore its schema in Anki."
+                    {
+                        "path": MODELS[kind],
+                        "code": "model",
+                        "message": f"Model {MODELS[kind]} has incompatible fields; restore its schema in Anki.",
+                    }
                 )
     if problems:
-        raise LoomError("\n".join(problems), "preflight")
+        raise PreflightError(problems)
     removed = []
     if prune:
         if not cards:
@@ -241,8 +265,9 @@ def ensure_model(client, kind, available):
         available.append(name)
 
 
-def apply(entries, removed, client, state):
-    available = client.call("modelNames")
+def apply(entries, removed, client, state, *, progress: ProgressCallback = no_progress):
+    progress(ProgressUpdate("Applying changes", total=len(entries) + len(removed)))
+    available = client.call("modelNames") if any(e.action == "create" for e in entries) else []
     # Validate all existing destination model schemas before writing any notes.
     for kind in {e.card.kind for e in entries if e.action == "create"}:
         if MODELS[kind] in available:
@@ -250,11 +275,19 @@ def apply(entries, removed, client, state):
             expected = ["Front", "Back"] + (["Extra"] if kind == "reverse" else [])
             if actual != expected:
                 raise LoomError(f"Model {MODELS[kind]} has unexpected fields: {actual}", "model")
-    for entry in entries:
+    for index, entry in enumerate(entries):
+        progress(
+            ProgressUpdate(
+                "Applying changes", index, len(entries) + len(removed), entry.card.path.name
+            )
+        )
         card, remote, target = entry.card, entry.remote, entry.target
         if card.path.read_bytes().decode("utf-8") != card.source:
             raise LoomError(f"{card.path}: edited during sync; rerun.", "conflict")
-        if remote and snapshot(client.note(remote["id"])) != snapshot(remote):
+        # A no-op needs no second collection read. Recheck before every write,
+        # including recovery of a missing numeric ID in the source file.
+        needs_write = entry.action != "unchanged" or card.note_id != remote["id"]
+        if needs_write and remote and snapshot(client.note(remote["id"])) != snapshot(remote):
             raise LoomError(f"Anki note {remote['id']} changed during sync; rerun.", "conflict")
         if entry.action == "unchanged":
             if card.note_id != remote["id"]:
@@ -318,7 +351,8 @@ def apply(entries, removed, client, state):
             "sourceTags": card.tags,
         }
         state.save()
-    for remote in removed:
+    for index, remote in enumerate(removed, start=len(entries)):
+        progress(ProgressUpdate("Removing missing notes", index, len(entries) + len(removed)))
         if remote.get("alreadyDeleted"):
             del state.notes[str(remote["id"])]
             state.save()
@@ -330,3 +364,7 @@ def apply(entries, removed, client, state):
         client.call("deleteNotes", notes=[remote["id"]])
         del state.notes[str(remote["id"])]
         state.save()
+
+    progress(
+        ProgressUpdate("Sync complete", len(entries) + len(removed), len(entries) + len(removed))
+    )

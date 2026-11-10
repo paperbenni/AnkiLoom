@@ -8,12 +8,16 @@ from pathlib import Path
 
 import click
 from filelock import Timeout
+from rich.console import Console
+from rich_click import RichContext, RichGroup
 
 from . import __version__
 from .cards import MODELS, YANKI_MODELS, scan
 from .configuration import client_for, config
 from .errors import LoomError, operation_error
+from .progress import ProgressUpdate
 from .service import SyncOptions, sync_once
+from .terminal import SyncDisplay, configure_color, console, render_error, render_result
 from .watch import watch_folder
 
 EXIT_CODES = {
@@ -36,20 +40,8 @@ EXIT_CODES = {
 def emit(value, as_json):
     if as_json:
         click.echo(json.dumps(value, ensure_ascii=False, sort_keys=True))
-    elif isinstance(value, dict) and "changes" in value:
-        for change in value["changes"]:
-            click.secho(
-                f"  {change['action']:10} {change['path']} → {change['deck']}",
-                fg={"create": "green", "update": "yellow", "adopt": "cyan", "delete": "red"}.get(
-                    change["action"]
-                ),
-            )
-        click.echo(
-            ("Preview: " if value.get("dryRun") else "")
-            + ", ".join(f"{n} {name}" for name, n in value["summary"].items())
-        )
     else:
-        click.echo(json.dumps(value, indent=2, ensure_ascii=False))
+        render_result(value)
 
 
 def guarded(function):
@@ -61,11 +53,9 @@ def guarded(function):
             exc = operation_error(exc)
             code = EXIT_CODES.get(exc.code, 1)
             if kwargs.get("as_json"):
-                click.echo(
-                    json.dumps({"ok": False, "error": {"code": exc.code, "message": str(exc)}})
-                )
+                click.echo(json.dumps({"ok": False, "error": exc.as_dict()}))
             else:
-                click.secho(f"Error: {exc}", fg="red", err=True)
+                render_error(exc.as_dict())
             raise click.exceptions.Exit(code) from exc
 
     return wrapper
@@ -82,7 +72,13 @@ def skill_text():
 def command_reference() -> str:
     """Render the command definitions for both the agent skill and website."""
     text = ""
-    context = click.Context(cli, info_name="ankiloom")
+    reference_console = Console(color_system=None, no_color=True, force_terminal=False, width=100)
+    context = RichContext(
+        cli,
+        info_name="ankiloom",
+        color=False,
+        rich_console=reference_console,
+    )
     for name, command in [
         ("ankiloom", cli),
         *[(f"ankiloom {n}", c) for n, c in sorted(cli.commands.items())],
@@ -90,9 +86,12 @@ def command_reference() -> str:
         ctx = (
             context
             if command is cli
-            else click.Context(command, info_name=name.split()[-1], parent=context)
+            else RichContext(command, info_name=name.split()[-1], parent=context)
         )
-        text += f"\n### `{name}`\n\n```text\n{command.get_help(ctx)}\n```\n"
+        with reference_console.capture() as capture:
+            help_text = command.get_help(ctx)
+        help_text = capture.get() + help_text
+        text += f"\n### `{name}`\n\n```text\n{help_text.strip()}\n```\n"
     return text
 
 
@@ -102,7 +101,27 @@ def show_skill(ctx, param, value):
         ctx.exit()
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 100})
+@click.group(
+    cls=RichGroup,
+    context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 100},
+)
+@click.option(
+    "--color",
+    type=click.Choice(["auto", "always", "never"]),
+    default="auto",
+    is_eager=True,
+    expose_value=False,
+    callback=configure_color,
+    help="Terminal colors. Auto respects NO_COLOR; always overrides it.",
+)
+@click.option(
+    "--progress/--no-progress",
+    default=None,
+    help="Show progress (default: interactive terminals only; never in JSON output).",
+)
+@click.option(
+    "--verbose", is_flag=True, help="Include unchanged notes and all affected error paths."
+)
 @click.version_option(__version__)
 @click.option(
     "--skill",
@@ -112,12 +131,14 @@ def show_skill(ctx, param, value):
     callback=show_skill,
     help="Print an LLM skill with live CLI reference, then exit.",
 )
-def cli():
+@click.pass_context
+def cli(ctx, progress, verbose):
     """Weave Markdown flashcards into Anki through AnkiConnect.
 
     One file per note. Use check for offline validation, then sync --dry-run
     to compare with Anki. Notes are never deleted unless you pass --prune.
     """
+    ctx.ensure_object(dict).update(progress=progress, verbose=verbose)
 
 
 def root_options(function):
@@ -166,7 +187,8 @@ def check(root, deck, exclude, as_json):
     """
     root = root.resolve()
     deck, exclude, _ = config(root, deck, exclude)
-    cards = scan(root, deck, exclude)
+    with SyncDisplay(as_json=as_json) as display:
+        cards = scan(root, deck, exclude, progress=display.update)
     emit(
         {
             "ok": True,
@@ -219,20 +241,22 @@ def sync(root, deck, exclude, url, timeout, dry_run, adopt, force, prune, ankiwe
     --prune requires the complete original ROOT. Excluded files also count
     as absent. Without --prune, missing files never cause deletions.
     """
-    result = sync_once(
-        SyncOptions(
-            root=root,
-            deck=deck,
-            exclude=exclude,
-            url=url,
-            timeout=timeout,
-            dry_run=dry_run,
-            adopt=adopt,
-            force=force,
-            prune=prune,
-            ankiweb=ankiweb,
+    with SyncDisplay(as_json=as_json) as display:
+        result = sync_once(
+            SyncOptions(
+                root=root,
+                deck=deck,
+                exclude=exclude,
+                url=url,
+                timeout=timeout,
+                dry_run=dry_run,
+                adopt=adopt,
+                force=force,
+                prune=prune,
+                ankiweb=ankiweb,
+            ),
+            progress=display.update,
         )
-    )
     emit(result.report, as_json)
 
 
@@ -242,7 +266,7 @@ def watch_event(event, as_json):
     elif event["event"] == "sync":
         emit(event, False)
     elif event["event"] == "error":
-        click.secho(f"Error: {event['error']['message']}", fg="red", err=True)
+        render_error(event["error"])
         if event["retryIn"] is not None:
             click.echo(
                 f"Retrying in {event['retryIn']:g}s; journaled writes will be recovered.", err=True
@@ -253,9 +277,9 @@ def watch_event(event, as_json):
                 err=True,
             )
     elif event["event"] == "watching":
-        click.echo(f"Watching {event['root']} (Ctrl+C to stop).")
+        console().print(f"Watching {event['root']} (Ctrl+C to stop).", style="bold cyan")
     else:
-        click.echo("Watch stopped.")
+        console().print("Watch stopped.", style="dim")
 
 
 @cli.command()
@@ -313,13 +337,20 @@ def watch(
         dry_run=dry_run,
         ankiweb=ankiweb,
     )
-    watch_folder(
-        options,
-        lambda event: watch_event(event, as_json),
-        interval=interval,
-        debounce=debounce,
-        retry_delay=retry_delay,
-    )
+    with SyncDisplay(as_json=as_json) as display:
+
+        def report_event(event):
+            display.stop()
+            watch_event(event, as_json)
+
+        watch_folder(
+            options,
+            report_event,
+            interval=interval,
+            debounce=debounce,
+            retry_delay=retry_delay,
+            progress=display.update,
+        )
 
 
 @cli.command()
@@ -329,16 +360,13 @@ def watch(
 def doctor(url, timeout, as_json):
     """Check the AnkiConnect connection without modifying Anki."""
     client = client_for(url, timeout)
-    client.connect()
-    emit(
-        {
-            "ok": True,
-            "url": client.endpoint,
-            "decks": client.call("deckNames"),
-            "models": client.call("modelNames"),
-        },
-        as_json,
-    )
+    with SyncDisplay(as_json=as_json) as display:
+        display.update(ProgressUpdate("Connecting to Anki"))
+        client.connect()
+        display.update(ProgressUpdate("Reading decks and models"))
+        decks = client.call("deckNames")
+        models = client.call("modelNames")
+    emit({"ok": True, "url": client.endpoint, "decks": decks, "models": models}, as_json)
 
 
 @cli.command("list")
@@ -348,9 +376,12 @@ def doctor(url, timeout, as_json):
 def list_notes(url, timeout, as_json):
     """List notes adopted or created by AnkiLoom (read-only)."""
     client = client_for(url, timeout)
-    client.connect()
-    ids = client.call("findNotes", query="tag:ankiloom::managed")
-    notes = client.call("notesInfo", notes=ids) if ids else []
+    with SyncDisplay(as_json=as_json) as display:
+        display.update(ProgressUpdate("Connecting to Anki"))
+        client.connect()
+        display.update(ProgressUpdate("Reading managed notes"))
+        ids = client.call("findNotes", query="tag:ankiloom::managed")
+        notes = client.call("notesInfo", notes=ids) if ids else []
     emit({"ok": True, "notes": notes}, as_json)
 
 
@@ -373,12 +404,16 @@ def style(css, url, timeout, include_yanki, dry_run, as_json):
     """
     content = css.read_text(encoding="utf-8")
     client = client_for(url, timeout)
-    client.connect()
-    wanted = set(MODELS.values()) | (set(YANKI_MODELS.values()) if include_yanki else set())
-    models = sorted(wanted & set(client.call("modelNames")))
-    if not dry_run:
-        for name in models:
-            client.call("updateModelStyling", model={"name": name, "css": content})
+    with SyncDisplay(as_json=as_json) as display:
+        display.update(ProgressUpdate("Connecting to Anki"))
+        client.connect()
+        wanted = set(MODELS.values()) | (set(YANKI_MODELS.values()) if include_yanki else set())
+        display.update(ProgressUpdate("Reading models"))
+        models = sorted(wanted & set(client.call("modelNames")))
+        if not dry_run:
+            for index, name in enumerate(models):
+                display.update(ProgressUpdate("Updating styles", index, len(models), name))
+                client.call("updateModelStyling", model={"name": name, "css": content})
     emit({"ok": True, "dryRun": dry_run, "models": models}, as_json)
 
 
@@ -394,7 +429,7 @@ def main():
                 )
             )
         else:
-            exc.show()
+            render_error({"code": "usage", "message": exc.format_message()})
         sys.exit(exc.exit_code)
     except click.exceptions.Exit as exc:
         sys.exit(exc.exit_code)
