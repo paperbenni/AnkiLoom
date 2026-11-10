@@ -264,10 +264,8 @@ def parse_card(path: Path, root: Path, deck_prefix: str = ""):
     return card
 
 
-def scan(root: Path, deck_prefix="", excludes=()):
-    root = root.resolve()
-    if not root.is_dir():
-        raise LoomError(f"Card root is not a directory: {root}", "input")
+def visible_files(root: Path, excludes=()):
+    """Select source files consistently for parsing and change detection."""
     excluded_paths = set()
     for pattern in excludes:
         if not pattern or Path(pattern).is_absolute() or ".." in Path(pattern).parts:
@@ -275,8 +273,7 @@ def scan(root: Path, deck_prefix="", excludes=()):
                 f"Exclude pattern must be relative to the card root: {pattern!r}", "config"
             )
         excluded_paths.update(root.glob(pattern))
-    cards, errors, ids, loom_ids = [], [], {}, {}
-    for path in sorted(root.rglob("*.md")):
+    for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
         if (
             any(p.startswith(".") for p in rel.parts)
@@ -284,6 +281,19 @@ def scan(root: Path, deck_prefix="", excludes=()):
             or any(parent in excluded_paths for parent in path.parents)
         ):
             continue
+        if path.is_file():
+            yield path
+
+
+def scan(root: Path, deck_prefix="", excludes=()):
+    root = root.resolve()
+    if not root.is_dir():
+        raise LoomError(f"Card root is not a directory: {root}", "input")
+    cards, errors, ids, loom_ids = [], [], {}, {}
+    for path in visible_files(root, excludes):
+        if path.suffix != ".md":
+            continue
+        rel = path.relative_to(root)
         try:
             if path.is_symlink() or not path.resolve().is_relative_to(root):
                 raise LoomError("Symlinked cards are unsupported; use ordinary files.", "input")

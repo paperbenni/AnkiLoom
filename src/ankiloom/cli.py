@@ -2,21 +2,19 @@
 
 import functools
 import json
-import os
 import sys
-import tomllib
 from collections import Counter
 from pathlib import Path
 
 import click
-from filelock import FileLock, Timeout
+from filelock import Timeout
 
 from . import __version__
-from .anki import AnkiConnect
 from .cards import MODELS, YANKI_MODELS, scan
-from .errors import LoomError
-from .storage import State
-from .sync import apply, plan
+from .configuration import client_for, config
+from .errors import LoomError, operation_error
+from .service import SyncOptions, sync_once
+from .watch import watch_folder
 
 EXIT_CODES = {
     "validation": 2,
@@ -60,13 +58,7 @@ def guarded(function):
         try:
             return function(*args, **kwargs)
         except (LoomError, OSError, Timeout) as exc:
-            if isinstance(exc, Timeout):
-                exc = LoomError(
-                    "Another sync holds this root's lock. Wait for it to finish and retry.",
-                    "conflict",
-                )
-            elif isinstance(exc, OSError):
-                exc = LoomError(f"Filesystem error: {exc}", "input")
+            exc = operation_error(exc)
             code = EXIT_CODES.get(exc.code, 1)
             if kwargs.get("as_json"):
                 click.echo(
@@ -162,35 +154,6 @@ def json_option(function):
     )(function)
 
 
-def config(root, deck, exclude, url=None):
-    path = root / "ankiloom.toml"
-    values = {}
-    if path.exists():
-        try:
-            values = tomllib.loads(path.read_text())
-        except tomllib.TOMLDecodeError as exc:
-            raise LoomError(f"Invalid {path}: {exc}", "config") from exc
-        unknown = set(values) - {"deck", "exclude", "url"}
-        if unknown:
-            raise LoomError(f"Unknown settings in {path}: {', '.join(sorted(unknown))}", "config")
-        if any(not isinstance(values[k], str) for k in ("deck", "url") if k in values):
-            raise LoomError(f"deck and url in {path} must be strings.", "config")
-        if "exclude" in values and (
-            not isinstance(values["exclude"], list)
-            or any(not isinstance(p, str) for p in values["exclude"])
-        ):
-            raise LoomError(f"exclude in {path} must be an array of glob strings.", "config")
-    return (
-        deck if deck is not None else values.get("deck", ""),
-        tuple(values.get("exclude", [])) + exclude,
-        url or values.get("url", "http://127.0.0.1:8765"),
-    )
-
-
-def client_for(url, timeout):
-    return AnkiConnect(url or "http://127.0.0.1:8765", os.environ.get("ANKICONNECT_KEY"), timeout)
-
-
 @cli.command()
 @root_options
 @json_option
@@ -256,52 +219,107 @@ def sync(root, deck, exclude, url, timeout, dry_run, adopt, force, prune, ankiwe
     --prune requires the complete original ROOT. Excluded files also count
     as absent. Without --prune, missing files never cause deletions.
     """
-    root = root.resolve()
-    deck, exclude, url = config(root, deck, exclude, url)
-    client = client_for(url, timeout)
-
-    def run():
-        cards = scan(root, deck, exclude)
-        state = State(root, url)
-        entries, removed = plan(cards, client, state, adopt, force, prune)
-        changes = [entry.report(root) for entry in entries]
-        changes += [
-            {
-                "path": f"noteId:{r['id']}",
-                "action": "delete",
-                "noteId": r["id"],
-                "deck": ", ".join(r["decks"]),
-            }
-            for r in removed
-        ]
-        if not dry_run:
-            apply(entries, removed, client, state)
-            for change, entry in zip(changes, entries):
-                change["noteId"] = entry.card.note_id
-            if ankiweb:
-                client.call("sync")
-        emit(
-            {
-                "ok": True,
-                "dryRun": dry_run,
-                "changes": changes,
-                "summary": dict(sorted(Counter(c["action"] for c in changes).items())),
-            },
-            as_json,
+    result = sync_once(
+        SyncOptions(
+            root=root,
+            deck=deck,
+            exclude=exclude,
+            url=url,
+            timeout=timeout,
+            dry_run=dry_run,
+            adopt=adopt,
+            force=force,
+            prune=prune,
+            ankiweb=ankiweb,
         )
+    )
+    emit(result.report, as_json)
 
-    if dry_run:
-        run()
+
+def watch_event(event, as_json):
+    if as_json:
+        click.echo(json.dumps(event, ensure_ascii=False, sort_keys=True))
+    elif event["event"] == "sync":
+        emit(event, False)
+    elif event["event"] == "error":
+        click.secho(f"Error: {event['error']['message']}", fg="red", err=True)
+        if event["retryIn"] is not None:
+            click.echo(
+                f"Retrying in {event['retryIn']:g}s; journaled writes will be recovered.", err=True
+            )
+        else:
+            click.echo(
+                "Waiting for a file change. Fix the issue, or stop watch to run an explicit sync.",
+                err=True,
+            )
+    elif event["event"] == "watching":
+        click.echo(f"Watching {event['root']} (Ctrl+C to stop).")
     else:
-        if not root.is_dir():
-            raise LoomError(f"Card root is not a directory: {root}", "input")
-        directory = root / ".ankiloom"
-        directory.mkdir(exist_ok=True)
-        ignore = directory / ".gitignore"
-        if not ignore.exists():
-            ignore.write_text("*\n", encoding="utf-8")
-        with FileLock(directory / "sync.lock", timeout=0):
-            run()
+        click.echo("Watch stopped.")
+
+
+@cli.command()
+@root_options
+@connection_options
+@click.option(
+    "--interval",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+    help="Poll file contents every this many seconds.",
+)
+@click.option(
+    "--debounce",
+    type=click.FloatRange(min=0),
+    default=0.5,
+    show_default=True,
+    help="Wait this many seconds after changes settle before syncing.",
+)
+@click.option(
+    "--retry-delay",
+    type=click.FloatRange(min=0, min_open=True),
+    default=10.0,
+    show_default=True,
+    help="Retry a connection failure or busy lock after this many seconds.",
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Continuously preview changes without writing files or Anki."
+)
+@click.option(
+    "--ankiweb", is_flag=True, help="Request AnkiWeb sync after each successful local sync."
+)
+@json_option
+@guarded
+def watch(
+    root, deck, exclude, url, timeout, interval, debounce, retry_delay, dry_run, ankiweb, as_json
+):
+    """Sync ROOT on startup and after files change. ROOT defaults to ./cards.
+
+    Watches cards, local assets and ankiloom.toml, respecting --exclude.
+    Saves are debounced; syncs run sequentially under the usual root lock.
+    Own noteId/loomId writes and hidden files do not trigger another sync.
+
+    Conflicts and invalid cards are reported, then watch waits for an edit.
+    Connection failures and busy locks retry through the journaled sync path.
+    Use one-shot sync for --adopt, --force and --prune. Ctrl+C stops cleanly.
+    With --json, each event is a separate JSON line (watching/sync/error/stopped).
+    """
+    options = SyncOptions(
+        root=root,
+        deck=deck,
+        exclude=exclude,
+        url=url,
+        timeout=timeout,
+        dry_run=dry_run,
+        ankiweb=ankiweb,
+    )
+    watch_folder(
+        options,
+        lambda event: watch_event(event, as_json),
+        interval=interval,
+        debounce=debounce,
+        retry_delay=retry_delay,
+    )
 
 
 @cli.command()
