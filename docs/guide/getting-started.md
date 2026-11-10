@@ -7,14 +7,14 @@ installed. Obsidian is never needed. AnkiLoom does not open or edit Anki's datab
 Run without a permanent installation:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.4.0 ankiloom check ./cards
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.4.0 ankiloom sync ./cards --dry-run
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.5.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.5.0 ankiloom sync ./cards --dry-run
 ```
 
 Or install the command:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.4.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.5.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards

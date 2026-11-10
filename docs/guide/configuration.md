@@ -3,7 +3,8 @@
 Set the endpoint with `--url` or `ANKICONNECT_URL`. Authentication uses
 `ANKICONNECT_KEY`; keys are not CLI arguments or journal contents.
 `--timeout` controls request timeout in seconds. Mutating requests are never
-retried automatically; identity and journal checks govern a subsequent invocation.
+retried automatically; noteId, legacy identity and journal checks govern a
+subsequent invocation.
 
 Optional `ROOT/ankiloom.toml` configures just three settings:
 
