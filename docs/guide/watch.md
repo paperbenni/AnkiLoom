@@ -14,7 +14,7 @@ or background process is installed.
 To run the released version without installing it:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.2.0 ankiloom watch ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.3.0 ankiloom watch ./cards
 ```
 
 If your cards were synced with Yanki, complete the [migration](./migration.md)
