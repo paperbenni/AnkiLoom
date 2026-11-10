@@ -56,10 +56,11 @@ def compatible_partial(remote, before, target):
         if value not in (before["fields"].get(key), target["fields"].get(key)):
             return False
     for key in ("tags", "decks"):
-        if remote[key] not in (before[key], target[key]):
-            # Tag removal then addition is two calls; accept the intermediate set too.
-            if key != "tags" or remote[key] != sorted(set(before[key]) & set(target[key])):
-                return False
+        # Tag removal then addition is two calls; accept the intermediate set too.
+        if remote[key] not in (before[key], target[key]) and (
+            key != "tags" or remote[key] != sorted(set(before[key]) & set(target[key]))
+        ):
+            return False
     return True
 
 
@@ -173,6 +174,17 @@ def plan(cards, client, state, adopt=False, force=False, prune=False):
             )
         for note_id, record in state.notes.items():
             if int(note_id) not in used:
+                if record.get("pendingDelete") and not client.call(
+                    "findNotes", query=f"nid:{note_id}"
+                ):
+                    removed.append(
+                        {
+                            "id": int(note_id),
+                            "decks": record["snapshot"]["decks"],
+                            "alreadyDeleted": True,
+                        }
+                    )
+                    continue
                 remote = client.note(int(note_id))
                 if snapshot(remote) != record["snapshot"] or MANAGED not in remote["tags"]:
                     raise LoomError(
@@ -279,8 +291,14 @@ def apply(entries, removed, client, state):
         }
         state.save()
     for remote in removed:
+        if remote.get("alreadyDeleted"):
+            del state.notes[str(remote["id"])]
+            state.save()
+            continue
         if snapshot(client.note(remote["id"])) != snapshot(remote):
             raise LoomError(f"Anki note {remote['id']} changed before pruning; rerun.", "conflict")
+        state.notes[str(remote["id"])]["pendingDelete"] = True
+        state.save()
         client.call("deleteNotes", notes=[remote["id"]])
         del state.notes[str(remote["id"])]
         state.save()

@@ -73,6 +73,18 @@ class State:
                 self.data = json.loads(self.path.read_text())
                 if self.data["version"] != 1 or not isinstance(self.data["notes"], dict):
                     raise ValueError("unknown state schema")
+                for note_id, record in self.data["notes"].items():
+                    if not note_id.isdecimal() or not isinstance(record, dict):
+                        raise ValueError("invalid note record")
+                    snap = record["snapshot"]
+                    if not isinstance(record["loomId"], str) or not isinstance(
+                        record["sourceTags"], list
+                    ):
+                        raise TypeError("invalid identity or source tags")
+                    if not isinstance(snap["fields"], dict) or not isinstance(snap["model"], str):
+                        raise TypeError("invalid note snapshot")
+                    if any(not isinstance(snap[k], list) for k in ("tags", "decks", "cards")):
+                        raise ValueError("invalid note snapshot lists")
                 if self.data["endpoint"] != endpoint:
                     raise LoomError(
                         "This root was synced to another AnkiConnect URL. Use the original --url, or a separate root and Anki profile.",
