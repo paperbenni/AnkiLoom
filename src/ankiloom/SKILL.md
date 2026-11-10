@@ -49,7 +49,16 @@ run a preview with `--adopt` to establish a fresh baseline against the same
 Anki collection. A successful create with a lost response recovers using the
 persisted `loomId`, so rerun the same command and do not remove IDs.
 
-JSON is one object on stdout. Exit codes: 0 success, 1 unexpected/general error,
+`watch ROOT` syncs immediately, then after file changes settle. It shares the
+sync journal and lock, ignores its own metadata writes, and catches changes
+made during a sync. Connection failures and busy locks retry; conflicts and
+validation errors wait for a file change. Use one-shot sync for adoption,
+forced overwrites and pruning; watch does not expose those options.
+`watch --dry-run` only previews. Ctrl+C stops watch cleanly with exit code 0.
+
+One-shot JSON is one object on stdout. Watch JSON is newline-delimited events
+with `event` equal to `watching`, `sync`, `error` or `stopped`; errors are
+nonfatal and can include `retryIn` in seconds (null means waiting for an edit). Exit codes: 0 success, 1 unexpected/general error,
 2 input/config/usage, 3 preflight/conflict/state, 4 AnkiConnect/API error,
 130 interrupted. A failed apply may have completed earlier notes; fix the
 reported issue and rerun. Dry runs and checks never write source files or Anki.

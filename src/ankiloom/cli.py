@@ -150,7 +150,7 @@ def connection_options(function):
 
 def json_option(function):
     return click.option(
-        "--json", "as_json", is_flag=True, help="Emit a JSON result or structured runtime error."
+        "--json", "as_json", is_flag=True, help="Emit JSON results and structured runtime errors."
     )(function)
 
 

@@ -26,4 +26,7 @@ jobs:
       - run: uv run ty check
       - run: uv build
       - shell: bash
-        run: uvx --from dist/ankiloom-0.1.0-py3-none-any.whl ankiloom --skill
+        run: |
+          for wheel in dist/*.whl; do
+            uvx --from "$wheel" ankiloom --skill
+          done

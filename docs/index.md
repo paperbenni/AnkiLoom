@@ -39,7 +39,7 @@ $$
 ## Try it without installing
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.1.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.2.0 ankiloom check ./cards
 ```
 
 Validation works offline. To sync, run Anki desktop with AnkiConnect installed,

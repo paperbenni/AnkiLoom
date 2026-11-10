@@ -26,6 +26,7 @@ export default defineConfig({
         text: 'Using AnkiLoom',
         items: [
           { text: 'Sync and recovery', link: '/guide/sync' },
+          { text: 'Watch a folder', link: '/guide/watch' },
           { text: 'Configuration', link: '/guide/configuration' },
           { text: 'CLI and agents', link: '/guide/agents' }
         ]

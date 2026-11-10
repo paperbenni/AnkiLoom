@@ -24,13 +24,13 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Validation works offline:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.1.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.2.0 ankiloom check ./cards
 ```
 
 Or install the CLI:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.1.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.2.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards
@@ -45,6 +45,16 @@ Basic, reversed, cloze and typed-answer notes are supported, along with tags,
 math, tables and local image/audio media. Anki-side edits are detected as
 conflicts; deletion requires explicit `--prune`. `--json` supports scripts,
 and `--skill` exports an agent skill with a live command reference.
+
+## Watch your cards
+
+```sh
+ankiloom watch ./cards
+```
+
+Syncs on startup and after saves settle, including local media changes.
+Connection failures retry through the sync journal; conflicts wait for you to
+resolve them. Ctrl+C stops the watcher. See the [watch guide](https://paperbenni.xyz/AnkiLoom/guide/watch.html).
 
 ## Development
 

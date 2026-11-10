@@ -13,7 +13,8 @@ a bundled LLM skill **plus a freshly generated reference for every installed
 command**, so the option documentation comes from the running version.
 Use `ankiloom --skill > SKILL.md` to export it for an agent.
 
-Commands with `--json` emit one JSON object to stdout, including runtime errors.
+One-shot commands with `--json` emit one JSON object to stdout, including runtime errors.
+`watch --json` streams newline-delimited JSON events; see [Watch a folder](./watch.md).
 Successful responses include `ok: true`; failures include `ok: false` and
 `error: {code, message}`. Exit codes:
 
