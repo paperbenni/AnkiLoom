@@ -4,13 +4,21 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ankiloom"
-version = "0.2.0"
+version = "0.3.0"
 description = "Weave Markdown flashcards into Anki, without Obsidian or regex configuration."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "paperbenni"}]
-dependencies = ["click>=8.1,<9", "markdown-it-py>=3,<5", "mdit-py-plugins>=0.4,<1", "PyYAML>=6,<7", "filelock>=3.16,<4"]
+dependencies = [
+    "click>=8.1,<9",
+    "markdown-it-py>=3,<5",
+    "mdit-py-plugins>=0.4,<1",
+    "PyYAML>=6,<7",
+    "filelock>=3.16,<4",
+    "rich-click>=1.9,<2",
+    "rich>=14,<15",
+]
 
 [project.scripts]
 ankiloom = "ankiloom.cli:main"

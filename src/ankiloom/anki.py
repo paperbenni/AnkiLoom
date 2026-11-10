@@ -48,21 +48,70 @@ class AnkiConnect:
         if not isinstance(version, int) or version < 6:
             raise LoomError("AnkiConnect v6 or newer is required; update the add-on.", "connection")
 
-    def note(self, note_id):
-        result = self.call("notesInfo", notes=[note_id])
-        if not result or not result[0] or not result[0].get("noteId"):
+    def find_identities(self, identities: list[str]) -> dict[str, list[int]]:
+        """Batch read-only identity lookups; never batch or retry mutations."""
+        matches = {}
+        for offset in range(0, len(identities), 100):
+            batch = identities[offset : offset + 100]
+            results = self.call(
+                "multi",
+                actions=[
+                    {"action": "findNotes", "version": 6, "params": {"query": f"tag:{identity}"}}
+                    for identity in batch
+                ],
+            )
+            if not isinstance(results, list) or len(results) != len(batch):
+                raise LoomError(
+                    "AnkiConnect multi returned an unexpected identity response.", "connection"
+                )
+            for identity, response in zip(batch, results):
+                if (
+                    not isinstance(response, dict)
+                    or "error" not in response
+                    or "result" not in response
+                ):
+                    raise LoomError(
+                        "AnkiConnect multi returned an invalid findNotes response.", "connection"
+                    )
+                if response["error"]:
+                    raise LoomError(f"AnkiConnect findNotes: {response['error']}", "anki")
+                if not isinstance(response["result"], list):
+                    raise LoomError(
+                        "AnkiConnect findNotes did not return a list of note IDs.", "connection"
+                    )
+                matches[identity] = response["result"]
+        return matches
+
+    def notes(self, note_ids: list[int]) -> dict[int, dict]:
+        """Read note fields and card decks in batches instead of two requests per note."""
+        notes = {}
+        ids = sorted(set(note_ids))
+        for offset in range(0, len(ids), 100):
+            result = self.call("notesInfo", notes=ids[offset : offset + 100])
+            found = [note for note in result if note and note.get("noteId")]
+            card_ids = [card_id for note in found for card_id in note["cards"]]
+            cards = self.call("cardsInfo", cards=card_ids) if card_ids else []
+            decks = {card["cardId"]: card["deckName"] for card in cards}
+            for note in found:
+                notes[note["noteId"]] = {
+                    "id": note["noteId"],
+                    "model": note["modelName"],
+                    "fields": {name: value["value"] for name, value in note["fields"].items()},
+                    "tags": sorted(note["tags"]),
+                    "cards": sorted(note["cards"]),
+                    "decks": sorted({decks[card_id] for card_id in note["cards"]}),
+                }
+        return notes
+
+    @staticmethod
+    def require_note(notes: dict[int, dict], note_id: int) -> dict:
+        if note_id not in notes:
             raise LoomError(
                 f"Anki note {note_id} no longer exists. Restore it from an Anki backup, "
                 "or remove noteId AND loomId from the Markdown to deliberately create a new note.",
                 "missing",
             )
-        note = result[0]
-        cards = self.call("cardsInfo", cards=note["cards"]) if note["cards"] else []
-        return {
-            "id": note["noteId"],
-            "model": note["modelName"],
-            "fields": {name: value["value"] for name, value in note["fields"].items()},
-            "tags": sorted(note["tags"]),
-            "cards": sorted(note["cards"]),
-            "decks": sorted({c["deckName"] for c in cards}),
-        }
+        return notes[note_id]
+
+    def note(self, note_id):
+        return self.require_note(self.notes([note_id]), note_id)

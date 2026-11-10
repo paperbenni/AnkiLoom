@@ -13,6 +13,7 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 from yaml.resolver import BaseResolver
 
 from .errors import LoomError
+from .progress import ProgressCallback, ProgressUpdate, no_progress
 
 MODELS = {
     "basic": "AnkiLoom - Basic",
@@ -285,15 +286,15 @@ def visible_files(root: Path, excludes=()):
             yield path
 
 
-def scan(root: Path, deck_prefix="", excludes=()):
+def scan(root: Path, deck_prefix="", excludes=(), *, progress: ProgressCallback = no_progress):
     root = root.resolve()
     if not root.is_dir():
         raise LoomError(f"Card root is not a directory: {root}", "input")
     cards, errors, ids, loom_ids = [], [], {}, {}
-    for path in visible_files(root, excludes):
-        if path.suffix != ".md":
-            continue
+    paths = [path for path in visible_files(root, excludes) if path.suffix == ".md"]
+    for index, path in enumerate(paths):
         rel = path.relative_to(root)
+        progress(ProgressUpdate("Reading Markdown", index, len(paths), str(rel)))
         try:
             if path.is_symlink() or not path.resolve().is_relative_to(root):
                 raise LoomError("Symlinked cards are unsupported; use ordinary files.", "input")
@@ -311,6 +312,7 @@ def scan(root: Path, deck_prefix="", excludes=()):
             cards.append(card)
         except (LoomError, UnicodeError, OSError) as exc:
             errors.append(f"{rel}: {exc}")
+    progress(ProgressUpdate("Reading Markdown", len(paths), len(paths)))
     if errors:
         raise LoomError("\n".join(errors), "validation")
     return cards

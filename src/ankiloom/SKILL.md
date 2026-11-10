@@ -63,3 +63,11 @@ nonfatal and can include `retryIn` in seconds (null means waiting for an edit). 
 130 interrupted. A failed apply may have completed earlier notes; fix the
 reported issue and rerun. Dry runs and checks never write source files or Anki.
 Use the generated reference below for the installed version's exact options.
+
+
+Human output uses Rich help, progress and concise summaries. Global flags go
+before the subcommand: `--color auto|always|never`, `--progress` / `--no-progress`,
+and `--verbose`. Auto respects NO_COLOR; always overrides it. JSON disables
+presentation and progress regardless of global flags. Grouped preflight errors
+include all individual problems in `error.details`; verbose human output lists
+all affected paths. Generated command references are always plain text.
