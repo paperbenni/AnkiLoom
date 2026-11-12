@@ -59,6 +59,8 @@ def render_error(error: dict) -> None:
 def render_result(value: dict) -> None:
     out = console()
     if "changes" in value:
+        if value.get("resetsHistory"):
+            out.print("Yanki replacements get new IDs and reset scheduling and review history.")
         for change in value["changes"]:
             if change["action"] == "unchanged" and not preferences().get("verbose"):
                 continue

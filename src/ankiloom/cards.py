@@ -25,12 +25,6 @@ MODELS = {
     "cloze": "AnkiLoom - Cloze",
     "type": "AnkiLoom - Type Answer",
 }
-YANKI_MODELS = {
-    "basic": "Yanki - Basic",
-    "reverse": "Yanki - Basic (and reversed card with extra)",
-    "cloze": "Yanki - Cloze",
-    "type": "Yanki - Basic (type in the answer)",
-}
 
 
 def markdown():
@@ -197,7 +191,7 @@ def render(text: str, card: Card, root: Path, parsed_tokens=None):
     tokens = md.parse(text, card.document.env.copy()) if parsed_tokens is None else parsed_tokens
     rewrite(tokens)
     return (
-        '<div class="ankiloom yanki">'
+        '<div class="ankiloom">'
         + md.renderer.render(tokens, md.options, card.document.env)
         + "</div>"
     )

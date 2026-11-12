@@ -53,9 +53,26 @@ note and must remain inside the card root. Remote images stay remote.
 
 Use `check ROOT` for offline validation. Use `sync ROOT --dry-run --json` to
 inspect the actual Anki plan. Anki desktop with AnkiConnect must be running.
-Use `--adopt` for existing compatible Yanki notes: updates preserve note IDs,
-models, card IDs and review history. Stop Yanki sync for those notes afterward.
-AnkiLoom refuses note type changes rather than silently recreating cards.
+Normal sync only supports matching AnkiLoom models. Use `--adopt` to establish a
+baseline for existing native notes, preserving their IDs and review history.
+Normal sync refuses note type changes rather than silently recreating cards.
+
+Yanki migration is a separate explicit recreation through AnkiConnect, with Anki
+open. Stop Yanki sync first. Preview with `migrate-yanki ROOT --dry-run`; apply
+with `migrate-yanki ROOT --reset-history` only when resetting scheduling and
+review history is acceptable. It creates and verifies native replacements, saves
+their new IDs in Markdown, then deletes the original notes. Unreferenced notes
+and native notes are left alone. Modified Yanki field schemas are rejected.
+After an interruption, rerun the migration command before editing or ordinary
+sync; preserve `.ankiloom/` and its temporary migration journal. Recovery tags
+beginning with `ankiloom::migrate::` identify unfinished replacements. No offline
+collection access or extra Anki add-on is required.
+
+New native models use bundled CSS. Ordinary sync preserves existing styling.
+The style command explicitly applies the bundled theme or a custom stylesheet
+to existing native models; it affects every note using those models. Content
+uses the `.ankiloom` class, with no `.yanki` compatibility class. Custom styling
+is a one-time operation; future new models start with the bundled theme.
 
 Markdown supplies content; Anki supplies scheduling. Anki-side content, tag,
 or deck edits detected against the local journal block sync. Copy wanted edits

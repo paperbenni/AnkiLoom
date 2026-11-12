@@ -7,14 +7,14 @@ installed. You can use any text editor; Obsidian is not required.
 Run without a permanent installation:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.6.0 ankiloom check ./cards
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.6.0 ankiloom sync ./cards --dry-run
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.7.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.7.0 ankiloom sync ./cards --dry-run
 ```
 
 Or install the command:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.6.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.7.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards

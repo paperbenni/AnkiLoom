@@ -1,0 +1,39 @@
+.card {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 20px;
+  line-height: 1.6;
+  text-align: left;
+  color: #24292f;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+
+.card.nightMode {
+  color: #e6e6e6;
+  background: #202124;
+}
+
+.ankiloom {
+  max-width: 65ch;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.ankiloom > :first-child { margin-top: 0; }
+.ankiloom > :last-child { margin-bottom: 0; }
+.ankiloom p, .ankiloom ul, .ankiloom ol { margin: 0.75em 0; }
+.ankiloom h1, .ankiloom h2, .ankiloom h3 { line-height: 1.25; }
+.ankiloom img, .ankiloom video { max-width: 100%; height: auto; }
+.ankiloom table { border-collapse: collapse; margin: 1rem 0; }
+.ankiloom th, .ankiloom td { border: 1px solid gray; padding: 0.3rem 0.7rem; }
+.ankiloom th { background: rgba(128, 128, 128, 0.12); }
+.ankiloom code, .ankiloom pre { font-family: ui-monospace, monospace; font-size: 0.9em; }
+.ankiloom pre { overflow-x: auto; padding: 0.75rem; background: rgba(128, 128, 128, 0.12); }
+.ankiloom pre code { font-size: inherit; overflow-wrap: normal; }
+.ankiloom blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid gray; }
+.ankiloom a { color: #0969da; }
+.nightMode .ankiloom a { color: #80bfff; }
+.cloze { font-weight: bold; color: #0969da; }
+.nightMode .cloze { color: #80bfff; }
+hr { max-width: 65ch; margin: 1.25rem auto; border: 0; border-top: 1px solid gray; }
+#typeans { box-sizing: border-box; max-width: 100%; font: inherit; }

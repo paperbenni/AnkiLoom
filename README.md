@@ -26,22 +26,23 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Validation works offline:
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.6.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.7.0 ankiloom check ./cards
 ```
 
 Or install the CLI:
 
 ```sh
-uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.6.0
+uv tool install git+https://github.com/paperbenni/AnkiLoom@v0.7.0
 ankiloom check ./cards
 ankiloom sync ./cards --dry-run
 ankiloom sync ./cards
 ```
 
 Syncing requires Anki desktop with [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
-installed. To take over existing Yanki notes, first stop Yanki sync and use
-`ankiloom sync ./cards --adopt --dry-run`, then run without `--dry-run`.
-See the [migration guide](https://paperbenni.xyz/AnkiLoom/guide/migration.html).
+installed. Yanki migration is an explicit recreation that resets scheduling and
+review history: stop Yanki sync, preview with `ankiloom migrate-yanki ./cards --dry-run`,
+then apply with `--reset-history`. See the
+[migration guide](https://paperbenni.xyz/AnkiLoom/guide/migration.html).
 
 Basic, reversed, cloze and typed-answer notes are supported, along with tags,
 math, tables and local image/audio media. Anki-side edits are detected as
@@ -50,6 +51,11 @@ and `--skill` exports an agent skill with a live command reference. Rich help,
 live progress and concise summaries make terminal use readable. Use
 `ankiloom --verbose sync` for per-note details or `ankiloom --color always sync`
 to override color auto-detection.
+
+New models include readable default styling; no CSS file is required. Sync
+preserves existing styles. Use `ankiloom style --default` to explicitly apply the
+bundled theme, or `ankiloom style ./custom.css` for your own stylesheet. See
+[card styling](https://paperbenni.xyz/AnkiLoom/guide/styling.html).
 
 ## Update
 

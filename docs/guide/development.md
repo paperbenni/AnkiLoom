@@ -12,7 +12,9 @@ type checker across source and tests. All check tools and the Anki test engine
 are locked development dependencies; Anki is not a runtime dependency.
 
 HTTP integration tests exercise AnkiConnect requests, migration, conflicts,
-locks, dry runs, pruning and lost responses after create/update/delete.
+locks, dry runs, pruning and lost responses after create/update/delete, including
+Yanki replacement creation and deletion. Yanki compatibility is isolated in
+the explicit recreation command; normal sync only supports native models.
 Real Anki-engine tests create a temporary collection and verify all four note
 models generate and render the expected cards. Tests never use your real profile.
 

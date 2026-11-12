@@ -28,6 +28,7 @@ export default defineConfig({
           { text: 'Sync and recovery', link: '/guide/sync' },
           { text: 'Watch a folder', link: '/guide/watch' },
           { text: 'Configuration', link: '/guide/configuration' },
+          { text: 'Card styling', link: '/guide/styling' },
           { text: 'Updating AnkiLoom', link: '/guide/updating' },
           { text: 'CLI and agents', link: '/guide/agents' }
         ]

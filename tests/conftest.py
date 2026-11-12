@@ -17,15 +17,14 @@ class Collection:
         self.next_id = 1000
         self.fail_after = None
 
-    def note(self, model="Yanki - Basic", fields=None, deck="old", tags=None):
+    def note(self, model="AnkiLoom - Basic", fields=None, deck="old", tags=None):
         self.next_id += 1
         note_id = self.next_id
-        self.models.setdefault(model, {"fields": ["Front", "Back", "YankiNamespace"]})
+        self.models.setdefault(model, {"fields": list(fields) if fields else ["Front", "Back"]})
         self.notes[note_id] = {
             "noteId": note_id,
             "modelName": model,
-            "fields": fields
-            or {"Front": "old front", "Back": "old back", "YankiNamespace": "Yanki"},
+            "fields": fields or {"Front": "old front", "Back": "old back"},
             "tags": tags or ["personal"],
             "cards": [note_id * 10],
             "deck": deck,
@@ -85,7 +84,9 @@ class Collection:
             return p["filename"]
         if action == "addNote":
             n = p["note"]
-            return self.note(n["modelName"], n["fields"], n["deckName"], n["tags"])
+            note_id = self.note(n["modelName"], n["fields"], n["deckName"], n["tags"])
+            self.notes[note_id]["reviews"] = 0
+            return note_id
         if action == "updateNoteFields":
             n = p["note"]
             self.notes[n["id"]]["fields"].update(n["fields"])

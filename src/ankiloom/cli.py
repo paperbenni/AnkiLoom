@@ -12,7 +12,7 @@ from rich.console import Console
 from rich_click import RichContext, RichGroup
 
 from . import __version__
-from .cards import MODELS, YANKI_MODELS, scan
+from .cards import MODELS, scan
 from .configuration import client_for, config
 from .errors import LoomError, operation_error
 from .progress import ProgressUpdate
@@ -217,7 +217,7 @@ def check(root, deck, exclude, as_json):
 @click.option(
     "--adopt",
     is_flag=True,
-    help="Take over existing noteIds with compatible AnkiLoom/Yanki models; preserve review history.",
+    help="Take over existing AnkiLoom noteIds; preserve review history. Migrate Yanki notes first.",
 )
 @click.option(
     "--force",
@@ -239,8 +239,8 @@ def check(root, deck, exclude, as_json):
 def sync(root, deck, exclude, url, timeout, dry_run, adopt, force, prune, ankiweb, as_json):
     """Sync ROOT to running Anki. Markdown supplies content; Anki keeps scheduling.
 
-    Start with sync ROOT --adopt --dry-run when migrating from Yanki. Stop
-    running Yanki against the same notes after adopting them. ROOT defaults
+    Use migrate-yanki first for Yanki notes; it explicitly resets study history.
+    Use --adopt for existing native notes, such as on a new machine. ROOT defaults
     to ./cards. Changing the inferred note type is refused.
 
     --prune requires the complete original ROOT. Excluded files also count
@@ -390,29 +390,66 @@ def list_notes(url, timeout, as_json):
     emit({"ok": True, "notes": notes}, as_json)
 
 
-@cli.command()
-@click.argument("css", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@cli.command("migrate-yanki")
+@root_options
 @connection_options
 @click.option(
-    "--include-yanki",
+    "--dry-run", is_flag=True, help="Preview replacements without changing Anki or files."
+)
+@click.option(
+    "--reset-history",
     is_flag=True,
-    help="Also style Yanki note models retained during migration; affects all notes using them.",
+    help="Required to apply: replacements get new IDs and lose scheduling and review history.",
+)
+@json_option
+@guarded
+def migrate_yanki(root, deck, exclude, url, timeout, dry_run, reset_history, as_json):
+    """Replace referenced Yanki notes with native AnkiLoom notes.
+
+    Keep Anki open with AnkiConnect. This is a one-time recreation, not a
+    history-preserving adoption. Unreferenced notes and native notes are left alone.
+    A replacement is verified and its ID saved before deleting the original.
+    Rerun this command after an interruption; keep .ankiloom/ for recovery.
+    """
+    from .migration import migrate_yanki as migrate
+
+    if not dry_run and not reset_history:
+        raise click.UsageError(
+            "Applying migration requires --reset-history. Preview with --dry-run first."
+        )
+    with SyncDisplay(as_json=as_json) as display:
+        result = migrate(root, deck, exclude, url, timeout, dry_run, progress=display.update)
+    emit(result, as_json)
+
+
+@cli.command()
+@click.argument("css", required=False, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@connection_options
+@click.option(
+    "--default",
+    "use_default",
+    is_flag=True,
+    help="Apply the bundled AnkiLoom theme instead of a CSS file.",
 )
 @click.option("--dry-run", is_flag=True, help="List affected models without writing CSS.")
 @json_option
 @guarded
-def style(css, url, timeout, include_yanki, dry_run, as_json):
-    """Replace CSS on all existing AnkiLoom models with CSS file contents.
+def style(css, url, timeout, use_default, dry_run, as_json):
+    """Apply CSS or --default to all existing AnkiLoom models.
 
     Models are global in Anki: every note using an affected model is styled.
-    Include .yanki selectors in CSS when styling adopted Yanki models.
+    Normal sync leaves existing styles alone. New models use the bundled theme.
     """
-    content = css.read_text(encoding="utf-8")
+    from .models import CSS
+
+    if (css is not None) == use_default:
+        raise click.UsageError("Provide either a CSS file or --default.")
+    content = CSS if use_default else css.read_text(encoding="utf-8")
     client = client_for(url, timeout)
     with SyncDisplay(as_json=as_json) as display:
         display.update(ProgressUpdate("Connecting to Anki"))
         client.connect()
-        wanted = set(MODELS.values()) | (set(YANKI_MODELS.values()) if include_yanki else set())
+        wanted = set(MODELS.values())
         display.update(ProgressUpdate("Reading models"))
         models = sorted(wanted & set(client.call("modelNames")))
         if not dry_run:

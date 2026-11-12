@@ -17,7 +17,7 @@ features:
   - title: Your Markdown, your editor
     details: Write one note per file, or combine quick facts and longer cards in a study sheet. Folders become decks.
   - title: Preview before syncing
-    details: Validate offline, compare with Anki in a dry run, and adopt existing Yanki notes in place. Deletion is always explicit.
+    details: Validate offline and compare with Anki in a dry run. Ordinary sync preserves review history; deletion is explicit.
   - title: Made for the terminal
     details: Run through uvx. Preview changes, watch your edits, and export card-writing instructions for an agent.
 ---
@@ -42,7 +42,7 @@ with `question :: answer` lines and `##` heading sections.
 ## Try it without installing
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.6.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.7.0 ankiloom check ./cards
 ```
 
 Validation works offline. To sync, run Anki desktop with AnkiConnect installed,

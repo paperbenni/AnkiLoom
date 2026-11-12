@@ -5,7 +5,7 @@ from anki.collection import Collection
 from anki.decks import DeckId
 
 from ankiloom.cards import MODELS, parse_card
-from ankiloom.sync import CSS, templates
+from ankiloom.models import CSS, templates
 
 
 @pytest.mark.parametrize(
@@ -47,6 +47,7 @@ def test_real_anki_renders_generated_cards(tmp_path, kind, source, count):
         cards = note.cards()
         assert len(cards) == count
         for actual in cards:
+            assert actual.reps == 0 and actual.queue == 0 and actual.type == 0
             assert actual.question() and actual.answer()
             assert "{{" not in actual.question() and "{{" not in actual.answer()
         if kind == "cloze":

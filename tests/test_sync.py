@@ -41,12 +41,12 @@ def test_create_update_and_idempotence(server, tmp_path):
     path.write_text(path.read_text().replace("Answer", "Updated"))
     assert invoke(server, tmp_path).exit_code == 0
     assert "Updated" in note["fields"]["Back"]
-    assert note["cards"] == card_ids and note["reviews"] == 42
+    assert note["cards"] == card_ids and note["reviews"] == 0
 
 
 def test_adopt_preserves_model_id_reviews_and_unrelated_tags(server, tmp_path):
     collection, _ = server
-    note_id = collection.note()
+    note_id = collection.note(fields={"Front": "old front", "Back": "old back", "Personal": "keep"})
     path = make(tmp_path, note_id=note_id)
     assert invoke(server, tmp_path).exit_code == 3
     before = deepcopy(collection.notes)
@@ -59,8 +59,9 @@ def test_adopt_preserves_model_id_reviews_and_unrelated_tags(server, tmp_path):
     assert invoke(server, tmp_path, "--adopt").exit_code == 0
     note = collection.notes[note_id]
     assert len(collection.notes) == 1
-    assert note["modelName"] == "Yanki - Basic" and note["reviews"] == 42
-    assert note["fields"]["YankiNamespace"] == "Yanki" and "personal" in note["tags"]
+    assert note["modelName"] == "AnkiLoom - Basic" and note["reviews"] == 42
+    assert note["fields"]["Personal"] == "keep"
+    assert "personal" in note["tags"]
 
 
 def test_all_preflight_before_mutations(server, tmp_path):

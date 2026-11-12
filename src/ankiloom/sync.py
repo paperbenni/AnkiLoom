@@ -7,47 +7,15 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from .cards import MODELS, YANKI_MODELS, Card
+from .cards import MODELS, Card
 from .errors import LoomError, PreflightError
+from .models import ensure_model
 from .progress import ProgressCallback, ProgressUpdate, no_progress
 from .storage import metadata_source, write_metadata
 
 MANAGED = "ankiloom::managed"
 IDENTITY_PREFIX = "ankiloom::id::"
 CREATION_PREFIX = "ankiloom::create::"
-CSS = """.card {font-family: system-ui, sans-serif; font-size: 20px; text-align: left;}
-.ankiloom {max-width: 65ch; margin: auto; padding: 0 1rem;}
-img, video {max-width: 100%; height: auto;}
-table {border-collapse: collapse;} th, td {border: 1px solid gray; padding: .3rem .7rem;}
-pre {overflow-x: auto;}"""
-
-
-def templates(kind):
-    if kind == "cloze":
-        return [
-            {"Name": "Cloze", "Front": "{{cloze:Front}}", "Back": "{{cloze:Front}}<br>{{Back}}"}
-        ]
-    if kind == "type":
-        return [
-            {
-                "Name": "Type Answer",
-                "Front": "{{Front}}<br>{{type:Back}}",
-                "Back": "{{Front}}<hr>{{type:Back}}",
-            }
-        ]
-    result = [
-        {"Name": "Forward", "Front": "{{Front}}", "Back": "{{FrontSide}}<hr id=answer>{{Back}}"}
-    ]
-    if kind == "reverse":
-        result[0]["Back"] += "<hr>{{Extra}}"
-        result.append(
-            {
-                "Name": "Reverse",
-                "Front": "{{Back}}",
-                "Back": "{{FrontSide}}<hr id=answer>{{Front}}<hr>{{Extra}}",
-            }
-        )
-    return result
 
 
 def snapshot(note):
@@ -59,8 +27,7 @@ def compatible_partial(remote, before, target):
     if remote["model"] != before["model"]:
         return False
     if remote["cards"] != before["cards"] and not (
-        remote["model"] in (MODELS["cloze"], YANKI_MODELS["cloze"])
-        and set(before["cards"]).issubset(remote["cards"])
+        remote["model"] == MODELS["cloze"] and set(before["cards"]).issubset(remote["cards"])
     ):
         return False
     for key, value in remote["fields"].items():
@@ -295,9 +262,9 @@ def plan(
                 noteId=card.note_id or 1,
             )
             if remote:
-                if remote["model"] not in (MODELS[card.kind], YANKI_MODELS[card.kind]):
+                if remote["model"] != MODELS[card.kind]:
                     raise LoomError(
-                        f"Note type is {remote['model']!r}, but Markdown requires {card.kind}. Type changes would risk review history; migrate the model in Anki first.",
+                        f"Note type is {remote['model']!r}, but Markdown requires {card.kind}. Sync accepts only matching AnkiLoom models. For Yanki notes, run migrate-yanki first.",
                         "model",
                     )
                 if not set(card.fields).issubset(remote["fields"]):
@@ -453,27 +420,6 @@ def plan(
                     )
                 removed.append(remote)
     return entries, removed, stale_creations
-
-
-def ensure_model(client, kind, available):
-    name = MODELS[kind]
-    fields = ["Front", "Back"] + (["Extra"] if kind == "reverse" else [])
-    if name in available:
-        actual = client.call("modelFieldNames", modelName=name)
-        if actual != fields:
-            raise LoomError(
-                f"Model {name} has unexpected fields: {actual}; expected {fields}.", "model"
-            )
-    else:
-        client.call(
-            "createModel",
-            modelName=name,
-            inOrderFields=fields,
-            css=CSS,
-            isCloze=kind == "cloze",
-            cardTemplates=templates(kind),
-        )
-        available.append(name)
 
 
 def apply(
