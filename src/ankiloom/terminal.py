@@ -66,7 +66,7 @@ def render_result(value: dict) -> None:
                 continue
             row = Text(f"  {change['action']:10} ")
             row.stylize(
-                {"create": "green", "update": "yellow", "adopt": "cyan", "delete": "red"}.get(
+                {"create": "green", "update": "yellow", "delete": "red"}.get(
                     change["action"], "dim"
                 )
             )

@@ -49,7 +49,9 @@ def test_recreation_then_ordinary_sync(server, tmp_path, kind):
     old_id, path = old_note(collection, tmp_path, kind, "course/card.md")
     unreferenced = collection.note(model=YANKI_MODELS["basic"])
     before = deepcopy(collection.notes[unreferenced])
-    assert sync(server, tmp_path, "--adopt").exit_code == 3
+    blocked = sync(server, tmp_path)
+    assert blocked.exit_code == 3
+    assert json.loads(blocked.output)["error"]["details"][0]["code"] == "model"
     result = migrate(server, tmp_path, "--reset-history")
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)

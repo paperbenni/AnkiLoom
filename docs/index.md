@@ -42,7 +42,7 @@ with `question :: answer` lines and `##` heading sections.
 ## Try it without installing
 
 ```sh
-uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.7.0 ankiloom check ./cards
+uvx --from git+https://github.com/paperbenni/AnkiLoom@v0.8.0 ankiloom check ./cards
 ```
 
 Validation works offline. To sync, run Anki desktop with AnkiConnect installed,

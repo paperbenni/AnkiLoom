@@ -61,14 +61,14 @@ def test_recheck_before_write_still_blocks_concurrent_anki_edit(monkeypatch, ser
     assert next(iter(server[0].notes.values()))["fields"]["Back"] == "External edit"
 
 
-def test_duplicate_errors_group_once_but_json_keeps_every_path(server, tmp_path):
+def test_identical_errors_group_once_but_json_keeps_every_path(server, tmp_path):
     for i in range(44):
-        make(tmp_path, f"card-{i}.md", note_id=server[0].note())
+        make(tmp_path, f"card-{i}.md", note_id=server[0].note(model="Yanki - Basic"))
     result = invoke(server, tmp_path, json_output=True)
     assert result.exit_code == 3
     error = json.loads(result.stdout)["error"]
     assert len(error["details"]) == 44
-    assert error["message"].count("Existing note needs explicit adoption") == 1
+    assert error["message"].count("Note type is") == 1
     assert "41 more" in error["message"]
     verbose = invoke(server, tmp_path, "--verbose")
     assert "41 more" not in verbose.output and "card-43.md" in verbose.output

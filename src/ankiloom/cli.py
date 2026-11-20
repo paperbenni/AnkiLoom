@@ -28,7 +28,6 @@ EXIT_CODES = {
     "parse": 2,
     "conflict": 3,
     "preflight": 3,
-    "adoption": 3,
     "duplicate": 3,
     "missing": 3,
     "model": 3,
@@ -215,16 +214,6 @@ def check(root, deck, exclude, as_json):
     help="Read Anki and show the plan without writing files, media, models or notes.",
 )
 @click.option(
-    "--adopt",
-    is_flag=True,
-    help="Take over existing AnkiLoom noteIds; preserve review history. Migrate Yanki notes first.",
-)
-@click.option(
-    "--force",
-    is_flag=True,
-    help="Explicitly overwrite Anki-side edits with Markdown. Does not bypass identity/model errors.",
-)
-@click.option(
     "--prune",
     is_flag=True,
     help="Delete unchanged, journal-tracked Anki notes absent from this complete ROOT.",
@@ -236,12 +225,13 @@ def check(root, deck, exclude, as_json):
 )
 @json_option
 @guarded
-def sync(root, deck, exclude, url, timeout, dry_run, adopt, force, prune, ankiweb, as_json):
-    """Sync ROOT to running Anki. Markdown supplies content; Anki keeps scheduling.
+def sync(root, deck, exclude, url, timeout, dry_run, prune, ankiweb, as_json):
+    """Sync ROOT to running Anki. Markdown wins; Anki keeps scheduling.
 
+    A noteId updates a matching AnkiLoom note in place, including on a fresh
+    checkout. Markdown overwrites direct edits to its fields and deck.
     Use migrate-yanki first for Yanki notes; it explicitly resets study history.
-    Use --adopt for existing native notes, such as on a new machine. ROOT defaults
-    to ./cards. Changing the inferred note type is refused.
+    ROOT defaults to ./cards. Changing the inferred note type is refused.
 
     --prune requires the complete original ROOT. Excluded files also count
     as absent. Without --prune, missing files never cause deletions.
@@ -255,8 +245,6 @@ def sync(root, deck, exclude, url, timeout, dry_run, adopt, force, prune, ankiwe
                 url=url,
                 timeout=timeout,
                 dry_run=dry_run,
-                adopt=adopt,
-                force=force,
                 prune=prune,
                 ankiweb=ankiweb,
             ),
@@ -330,7 +318,7 @@ def watch(
 
     Conflicts and invalid cards are reported, then watch waits for an edit.
     Connection failures and busy locks retry through the journaled sync path.
-    Use one-shot sync for --adopt, --force and --prune. Ctrl+C stops cleanly.
+    Use one-shot sync for --prune. Ctrl+C stops cleanly.
     With --json, each event is a separate JSON line (watching/sync/error/stopped).
     """
     options = SyncOptions(
@@ -379,7 +367,7 @@ def doctor(url, timeout, as_json):
 @json_option
 @guarded
 def list_notes(url, timeout, as_json):
-    """List notes adopted or created by AnkiLoom (read-only)."""
+    """List notes managed by AnkiLoom (read-only)."""
     client = client_for(url, timeout)
     with SyncDisplay(as_json=as_json) as display:
         display.update(ProgressUpdate("Connecting to Anki"))
@@ -406,8 +394,8 @@ def list_notes(url, timeout, as_json):
 def migrate_yanki(root, deck, exclude, url, timeout, dry_run, reset_history, as_json):
     """Replace referenced Yanki notes with native AnkiLoom notes.
 
-    Keep Anki open with AnkiConnect. This is a one-time recreation, not a
-    history-preserving adoption. Unreferenced notes and native notes are left alone.
+    Keep Anki open with AnkiConnect. This one-time recreation resets review history.
+    Unreferenced notes and native notes are left alone.
     A replacement is verified and its ID saved before deleting the original.
     Rerun this command after an interruption; keep .ankiloom/ for recovery.
     """

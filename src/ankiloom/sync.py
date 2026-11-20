@@ -22,26 +22,6 @@ def snapshot(note):
     return {key: note[key] for key in ("model", "fields", "tags", "decks", "cards")}
 
 
-def compatible_partial(remote, before, target):
-    """Accept only an interrupted write's old/new values, including deck/tag steps."""
-    if remote["model"] != before["model"]:
-        return False
-    if remote["cards"] != before["cards"] and not (
-        remote["model"] == MODELS["cloze"] and set(before["cards"]).issubset(remote["cards"])
-    ):
-        return False
-    for key, value in remote["fields"].items():
-        if value not in (before["fields"].get(key), target["fields"].get(key)):
-            return False
-    for key in ("tags", "decks"):
-        # Tag removal then addition is two calls; accept the intermediate set too.
-        if remote[key] not in (before[key], target[key]) and (
-            key != "tags" or remote[key] != sorted(set(before[key]) & set(target[key]))
-        ):
-            return False
-    return True
-
-
 def creation_tag(token: str) -> str:
     return CREATION_PREFIX + token
 
@@ -172,8 +152,6 @@ def plan(
     client,
     state,
     root,
-    adopt=False,
-    force=False,
     prune=False,
     *,
     progress: ProgressCallback = no_progress,
@@ -269,17 +247,6 @@ def plan(
                     )
                 if not set(card.fields).issubset(remote["fields"]):
                     raise LoomError("The existing note model is missing required fields.", "model")
-                owned = bool(
-                    (pending_record and pending_record.get("noteId") == note_id)
-                    or (identity and identity in remote["tags"])
-                )
-                if token and creation_tag(token) in remote["tags"]:
-                    owned = True
-                if not baseline and not adopt and not owned:
-                    raise LoomError(
-                        "Existing note needs explicit adoption. Preview with sync --adopt --dry-run, then sync --adopt to retain its ID and review history.",
-                        "adoption",
-                    )
                 if (
                     baseline
                     and baseline.get("loomId")
@@ -291,28 +258,15 @@ def plan(
                         "conflict",
                     )
                 current = snapshot(remote)
-                if baseline and not force and current != baseline["snapshot"]:
-                    pending_target = baseline.get("pending")
-                    if not pending_target or not compatible_partial(
-                        current, baseline["snapshot"], pending_target
-                    ):
-                        raise LoomError(
-                            "Anki changed since the last sync. Copy wanted edits into Markdown, then use --force to explicitly overwrite Anki's version.",
-                            "conflict",
-                        )
                 fields = {**remote["fields"], **card.fields}
                 old_tags = set(baseline.get("sourceTags", [])) if baseline else set()
                 tags = (set(remote["tags"]) - old_tags) | set(card.tags) | {MANAGED}
                 tags = {tag for tag in tags if not internal_tag(tag)}
                 target = {**current, "fields": fields, "tags": sorted(tags), "decks": [card.deck]}
                 action = (
-                    "adopt"
-                    if not baseline
-                    else (
-                        "unchanged"
-                        if current == target and not baseline.get("pending")
-                        else "update"
-                    )
+                    "unchanged"
+                    if current == target and not (baseline and baseline.get("pending"))
+                    else "update"
                 )
             else:
                 token = token or uuid.uuid4().hex
@@ -469,8 +423,11 @@ def apply(
             state.save()
         # A no-op needs no second collection read. Recheck before every write,
         # including recovery of a missing numeric ID in the source file.
-        needs_write = entry.action != "unchanged" or card.note_id != remote["id"] or legacy
-        if needs_write and remote and snapshot(client.note(remote["id"])) != snapshot(remote):
+        if (
+            remote
+            and (entry.action != "unchanged" or card.note_id != remote["id"] or legacy)
+            and (snapshot(client.note(remote["id"])) != snapshot(remote))
+        ):
             raise LoomError(f"Anki note {remote['id']} changed during sync; rerun.", "conflict")
         if entry.action == "unchanged":
             if card.note_id != remote["id"] or legacy:
@@ -479,8 +436,12 @@ def apply(
                     remove=("loomId",) if legacy else (),
                     noteId=remote["id"],
                 )
-            if creation:
-                state.pending_creations.pop(creation, None)
+            note_key = str(remote["id"])
+            record = {"snapshot": target, "sourceTags": card.tags}
+            if state.notes.get(note_key) != record or creation:
+                state.notes[note_key] = record
+                if creation:
+                    state.pending_creations.pop(creation, None)
                 state.save()
             continue
         if remote:
@@ -489,7 +450,8 @@ def apply(
             pending_state = {
                 "snapshot": snapshot(remote),
                 "pending": target,
-                "sourceTags": previous.get("sourceTags", []),
+                # A lost response may leave either set of Markdown tags on the note.
+                "sourceTags": sorted(set(previous.get("sourceTags", [])) | set(card.tags)),
             }
             if previous.get("loomId"):
                 pending_state["loomId"] = previous["loomId"]

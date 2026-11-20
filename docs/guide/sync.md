@@ -11,27 +11,27 @@ ankiloom sync ./cards
 `check` validates cards offline. A dry run compares them with Anki and reports
 planned changes. Neither command writes to Markdown or Anki.
 
-Ordinary sync creates and updates notes while preserving their IDs and review
-history. Keep Anki desktop running and avoid editing the same notes in Anki
-while a sync is in progress. Use one sync tool for each set of notes.
+Ordinary sync updates a matching AnkiLoom note by its `noteId`, preserving its
+note and card IDs and review history. Cards without IDs create new notes. Keep
+Anki desktop running and avoid editing the same notes in Anki while a sync is
+in progress. Use one sync tool for each set of notes.
 
 Sync is local by default. Add `--ankiweb` to sync AnkiWeb after a successful
 local sync.
 
-## Handle edits made in Anki
+## Markdown is the source of truth
 
-Changes to note content, tags or decks in Anki can conflict with your Markdown.
-Review both versions and copy any wanted changes into Markdown. Then preview
-and explicitly allow Markdown to overwrite Anki:
+Sync applies the Markdown card's fields and folder-derived deck, overwriting
+direct edits to those values in Anki. Copy any Anki edits you want to keep into
+Markdown before syncing. Sync also adds the tags listed in Markdown and keeps
+unrelated Anki tags. A checkout can remove tags it previously synced from
+Markdown because its local journal records those tags. On a fresh checkout,
+an existing Anki tag absent from Markdown is treated as an unrelated tag.
 
-```sh
-ankiloom sync ./cards --force --dry-run
-ankiloom sync ./cards --force
-```
-
-Normal study and scheduling changes do not cause conflicts. If a note was
-deleted in Anki, sync reports it as missing. Restore it from an Anki backup,
-or remove its ID from Markdown if you deliberately want a new note.
+Scheduling and review history stay in Anki. Sync reports IDs that point to
+missing notes or incompatible note types. If a note was deleted in Anki,
+restore it from a backup or remove its ID from Markdown to deliberately create
+a new note.
 
 ## Remove notes from Anki
 
@@ -59,8 +59,7 @@ unfinished work without creating duplicate notes.
 After an interrupted creation, rerun before editing the new card's content.
 For multi-card files, unchanged content can be recovered after a move or
 reorder; ambiguous matches require you to restore the original content or
-location before retrying. Use `--force` only to overwrite edits made in Anki;
-it is not needed for an ordinary retry.
+location before retrying.
 
 ### If the local sync data was lost
 
@@ -70,11 +69,11 @@ ID has not reached Markdown yet. Temporary tags beginning with
 `ankiloom::create::` can help you find these notes.
 
 For a note you want to keep, restore its numeric `noteId` in the Markdown
-frontmatter or its per-card ID comment. Then preview and adopt:
+frontmatter or its per-card ID comment. Then preview and sync:
 
 ```sh
-ankiloom sync ./cards --adopt --dry-run
-ankiloom sync ./cards --adopt
+ankiloom sync ./cards --dry-run
+ankiloom sync ./cards
 ```
 
 See [Tags and IDs](./card-format.md#tags-and-ids)
@@ -83,14 +82,16 @@ and [multi-card IDs](./card-format.md#multiple-notes-per-file) for the formats.
 ## Use another machine
 
 Keep card IDs in version control with your Markdown. Keep `.ankiloom/` local
-to each machine; AnkiLoom creates a Git ignore file for it automatically.
+to each machine for recovery and pruning. AnkiLoom creates a Git ignore file
+for it automatically.
 
-On another machine with the same Anki collection, preview and adopt the notes
-to establish that machine's sync history:
+Pull the latest Markdown and sync the same Anki collection to the other machine
+before running ordinary sync there. The IDs in the pulled files identify the
+existing notes.
 
 ```sh
-ankiloom sync ./cards --adopt --dry-run
-ankiloom sync ./cards --adopt
+ankiloom sync ./cards --dry-run
+ankiloom sync ./cards
 ```
 
 Wait for any unfinished sync to recover on the original machine before moving

@@ -218,7 +218,7 @@ def test_busy_lock_retries_after_other_sync_finishes(monkeypatch, server, tmp_pa
     assert len(syncs(events)) == 1
 
 
-def test_conflict_waits_and_does_not_force_overwrite(monkeypatch, server, tmp_path):
+def test_markdown_wins_when_both_sides_are_edited(monkeypatch, server, tmp_path):
     path = card(tmp_path)
 
     def edit_both_sides():
@@ -226,10 +226,8 @@ def test_conflict_waits_and_does_not_force_overwrite(monkeypatch, server, tmp_pa
         path.write_text(path.read_text().replace("Answer", "Markdown edit"))
 
     events = run(monkeypatch, server, tmp_path, {1: edit_both_sides}, ticks=15)
-    assert len(syncs(events)) == 1
-    errors = [e for e in events if e["event"] == "error"]
-    assert len(errors) == 1 and errors[0]["retryIn"] is None
-    assert next(iter(server[0].notes.values()))["fields"]["Back"] == "Anki edit"
+    assert [event["event"] for event in events] == ["watching", "sync", "sync", "stopped"]
+    assert "Markdown edit" in next(iter(server[0].notes.values()))["fields"]["Back"]
 
 
 def test_dry_run_never_writes_ids_or_anki(monkeypatch, server, tmp_path):

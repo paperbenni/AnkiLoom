@@ -22,8 +22,6 @@ class SyncOptions:
     url: str | None = None
     timeout: float = 15.0
     dry_run: bool = False
-    adopt: bool = False
-    force: bool = False
     prune: bool = False
     ankiweb: bool = False
 
@@ -48,9 +46,7 @@ def sync_once(options: SyncOptions, *, progress: ProgressCallback = no_progress)
             client,
             state,
             root,
-            options.adopt,
-            options.force,
-            options.prune,
+            prune=options.prune,
             progress=progress,
         )
         changes = [entry.report(root) for entry in entries]

@@ -41,15 +41,11 @@ If that journal is lost during migration, inspect Anki for tags beginning with
 `ankiloom::migrate::` before retrying. Restore the journal from a backup rather than
 discarding an unfinished replacement.
 
-## Already adopted by an older AnkiLoom version?
+## Notes managed by older AnkiLoom versions
 
-Run the same migration command. It replaces the retained Yanki notes and updates
-the local sync journal. Afterward, ordinary sync uses exactly the same models
-and behavior as notes originally created by AnkiLoom.
-
-`sync --adopt` now only establishes a baseline for existing **AnkiLoom** notes,
-for example on a new machine. It preserves those notes' IDs and review history;
-it does not convert or recreate notes.
+Run the same migration command for notes that still use Yanki models. For notes
+already using matching AnkiLoom models, ordinary sync uses their existing
+`noteId` and preserves review history.
 
 Older AnkiLoom versions also wrote a `loomId` field and `ankiloom::id::…` tag.
 For native notes, ordinary sync removes these after confirming `noteId`.

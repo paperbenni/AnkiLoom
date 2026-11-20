@@ -53,8 +53,8 @@ def watch_folder(
     root = options.root.resolve()
     if not root.is_dir():
         raise LoomError(f"Card root is not a directory: {root}", "input")
-    if options.prune or options.force or options.adopt:
-        raise LoomError("Use one-shot sync for adoption, forced overwrites or pruning.", "input")
+    if options.prune:
+        raise LoomError("Use one-shot sync for pruning.", "input")
     options = replace(options, root=root)
     baseline = tree_snapshot(options)
     pending = None

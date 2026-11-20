@@ -44,22 +44,23 @@ def test_create_update_and_idempotence(server, tmp_path):
     assert note["cards"] == card_ids and note["reviews"] == 0
 
 
-def test_adopt_preserves_model_id_reviews_and_unrelated_tags(server, tmp_path):
+def test_existing_note_id_preserves_model_id_reviews_and_unrelated_tags(server, tmp_path):
     collection, _ = server
     note_id = collection.note(fields={"Front": "old front", "Back": "old back", "Personal": "keep"})
     path = make(tmp_path, note_id=note_id)
-    assert invoke(server, tmp_path).exit_code == 3
     before = deepcopy(collection.notes)
     source = path.read_bytes()
     local_before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
-    result = invoke(server, tmp_path, "--adopt", "--dry-run")
+    result = invoke(server, tmp_path, "--dry-run")
     assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["summary"] == {"update": 1}
     assert collection.notes == before and path.read_bytes() == source
     assert local_before == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
-    assert invoke(server, tmp_path, "--adopt").exit_code == 0
+    assert invoke(server, tmp_path).exit_code == 0
     note = collection.notes[note_id]
     assert len(collection.notes) == 1
     assert note["modelName"] == "AnkiLoom - Basic" and note["reviews"] == 42
+    assert note["cards"] == before[note_id]["cards"]
     assert note["fields"]["Personal"] == "keep"
     assert "personal" in note["tags"]
 
@@ -75,21 +76,48 @@ def test_all_preflight_before_mutations(server, tmp_path):
     assert "noteId" not in (tmp_path / "a.md").read_text()
 
 
-@pytest.mark.parametrize("edit", ["fields", "tags", "deck"])
-def test_remote_edit_conflicts_and_force(server, tmp_path, edit):
+def test_markdown_wins_over_direct_edits_and_keeps_personal_tags(server, tmp_path):
     collection, _ = server
-    make(tmp_path)
+    path = make(tmp_path, "course/card.md")
     assert invoke(server, tmp_path).exit_code == 0
     note = next(iter(collection.notes.values()))
-    if edit == "fields":
-        note["fields"]["Back"] = "Edited in Anki"
-    elif edit == "tags":
-        note["tags"].append("manual")
-    else:
-        note["deck"] = "manual"
-    assert invoke(server, tmp_path).exit_code == 3
-    assert invoke(server, tmp_path, "--force").exit_code == 0
-    assert "Answer" in note["fields"]["Back"]
+    note["fields"]["Back"] = "Edited in Anki"
+    note["tags"].append("manual")
+    note["deck"] = "manual"
+    path.write_text(path.read_text().replace("Answer", "Edited in Markdown"))
+    assert invoke(server, tmp_path).exit_code == 0
+    assert "Edited in Markdown" in note["fields"]["Back"]
+    assert note["deck"] == "course" and "manual" in note["tags"]
+
+
+def test_git_synced_checkout_needs_only_markdown_and_note_id(server, tmp_path):
+    collection, _ = server
+    first = tmp_path / "first" / "cards"
+    second = tmp_path / "second" / "cards"
+    original = make(first, "course/card.md")
+    assert invoke(server, first).exit_code == 0
+    note_id, note = next(iter(collection.notes.items()))
+    card_ids = note["cards"][:]
+    pulled = make(second, "course/card.md")
+    pulled.write_bytes(original.read_bytes())
+    collection.calls.clear()
+    result = invoke(server, second)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["summary"] == {"unchanged": 1}
+    assert collection.calls == ["version", "notesInfo", "cardsInfo"]
+
+    # The second checkout still has a local snapshot from before this edit.
+    original.write_text(original.read_text().replace("Answer", "Edited on first machine"))
+    assert invoke(server, first).exit_code == 0
+    pulled.write_bytes(original.read_bytes())
+    result = invoke(server, second)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["summary"] == {"unchanged": 1}
+
+    pulled.write_text(pulled.read_text().replace("Edited on first machine", "Edited on second"))
+    assert invoke(server, second).exit_code == 0
+    assert list(collection.notes) == [note_id] and note["cards"] == card_ids
+    assert "Edited on second" in note["fields"]["Back"]
 
 
 def test_lost_create_response_does_not_duplicate(server, tmp_path):
@@ -235,7 +263,7 @@ def test_lost_update_response_can_resume(server, tmp_path, action):
     collection, _ = server
     note_id = collection.note()
     path = make(tmp_path, note_id=note_id)
-    assert invoke(server, tmp_path, "--adopt").exit_code == 0
+    assert invoke(server, tmp_path).exit_code == 0
     path.write_text(path.read_text().replace("Answer", "New answer").replace("topic", "newtopic"))
     path.rename(tmp_path / "renamed.md")
     (tmp_path / "course").mkdir()
@@ -296,19 +324,19 @@ def test_sync_lock(server, tmp_path):
     assert result.exit_code == 3 and "holds" in result.output
 
 
-def test_note_type_change_refused_even_with_force(server, tmp_path):
+def test_note_type_change_refused(server, tmp_path):
     collection, _ = server
     path = make(tmp_path)
     assert invoke(server, tmp_path).exit_code == 0
     path.write_text(path.read_text().replace("Question\n\n---\n\nAnswer", "~~Cloze~~"))
-    assert invoke(server, tmp_path, "--force").exit_code == 3
+    assert invoke(server, tmp_path).exit_code == 3
     assert len(collection.notes) == 1
 
 
 def test_deck_move_and_tag_removal(server, tmp_path):
     collection, _ = server
     path = make(tmp_path, "a/card.md", note_id=collection.note())
-    assert invoke(server, tmp_path, "--adopt").exit_code == 0
+    assert invoke(server, tmp_path).exit_code == 0
     (tmp_path / "b").mkdir()
     new = tmp_path / "b" / "card.md"
     path.rename(new)
@@ -368,21 +396,24 @@ def test_unwritable_metadata_fails_before_any_anki_writes(server, tmp_path):
     assert "noteId" not in (tmp_path / "a.md").read_text()
 
 
-def test_recovered_update_finalizes_pending_journal(server, tmp_path):
+@pytest.mark.parametrize("edit_before_retry", [False, True])
+def test_recovered_update_finalizes_pending_journal(server, tmp_path, edit_before_retry):
     collection, _ = server
     path = make(tmp_path, note_id=collection.note())
-    assert invoke(server, tmp_path, "--adopt").exit_code == 0
+    assert invoke(server, tmp_path).exit_code == 0
     path.write_text(path.read_text().replace("topic", "second"))
     collection.fail_after = "addTags"
     assert invoke(server, tmp_path).exit_code == 4
+    final_tag = "second"
+    if edit_before_retry:
+        final_tag = "third"
+        path.write_text(path.read_text().replace("second", final_tag))
     assert invoke(server, tmp_path).exit_code == 0
     state = json.loads((tmp_path / ".ankiloom" / "state.json").read_text())
     record = next(iter(state["notes"].values()))
-    assert "pending" not in record and record["sourceTags"] == ["second"]
-    path.write_text(path.read_text().replace("second", "third"))
-    assert invoke(server, tmp_path).exit_code == 0
+    assert "pending" not in record and record["sourceTags"] == [final_tag]
     tags = next(iter(collection.notes.values()))["tags"]
-    assert "third" in tags and "second" not in tags
+    assert sorted(tags) == sorted(["ankiloom::managed", "personal", final_tag])
 
 
 def test_legacy_loom_id_only_recovers_interrupted_create(server, tmp_path):

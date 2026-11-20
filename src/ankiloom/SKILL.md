@@ -53,9 +53,8 @@ note and must remain inside the card root. Remote images stay remote.
 
 Use `check ROOT` for offline validation. Use `sync ROOT --dry-run --json` to
 inspect the actual Anki plan. Anki desktop with AnkiConnect must be running.
-Normal sync only supports matching AnkiLoom models. Use `--adopt` to establish a
-baseline for existing native notes, preserving their IDs and review history.
-Normal sync refuses note type changes rather than silently recreating cards.
+Normal sync updates matching AnkiLoom models in place by `noteId`, preserving
+their IDs and review history. Missing notes and model mismatches block sync.
 
 Yanki migration is a separate explicit recreation through AnkiConnect, with Anki
 open. Stop Yanki sync first. Preview with `migrate-yanki ROOT --dry-run`; apply
@@ -74,10 +73,10 @@ to existing native models; it affects every note using those models. Content
 uses the `.ankiloom` class, with no `.yanki` compatibility class. Custom styling
 is a one-time operation; future new models start with the bundled theme.
 
-Markdown supplies content; Anki supplies scheduling. Anki-side content, tag,
-or deck edits detected against the local journal block sync. Copy wanted edits
-to Markdown first; `--force` explicitly permits replacing the Anki version.
-Do not use force as a generic retry. Ordinary retries recover interrupted writes.
+Markdown supplies fields and decks, overwriting direct edits to those values
+in Anki. Anki keeps scheduling and review history. Sync adds Markdown tags and
+keeps unrelated Anki tags. Removing a Markdown tag removes it from Anki when
+that checkout's local journal records the tag as previously synced.
 
 Missing files or removed sections do not delete notes. `--prune` is explicit and uses the complete
 original card root; excluded notes also count as missing. An empty root is
@@ -85,8 +84,8 @@ refused for pruning. Sync is local unless `--ankiweb` is passed.
 
 Keep `.ankiloom/` local and ignored by Git; it contains the lock and sync
 journal. Keep note IDs in version control with the Markdown. On a new machine,
-run a preview with `--adopt` to establish a fresh baseline against the same
-Anki collection. A successful create with a lost response recovers from the
+pull the latest Markdown and use ordinary sync against the same Anki collection.
+A successful create with a lost response recovers from the
 temporary token in the journal and its Anki tag, so rerun the same command.
 Once `noteId` is written, that recovery record and tag are cleared. If the
 journal is lost during an unfinished creation, find the
@@ -95,8 +94,7 @@ journal is lost during an unfinished creation, find the
 `watch ROOT` syncs immediately, then after file changes settle. It shares the
 sync journal and lock, ignores its own metadata writes, and catches changes
 made during a sync. Connection failures and busy locks retry; conflicts and
-validation errors wait for a file change. Use one-shot sync for adoption,
-forced overwrites and pruning; watch does not expose those options.
+validation errors wait for a file change. Use one-shot sync for pruning.
 `watch --dry-run` only previews. Ctrl+C stops watch cleanly with exit code 0.
 
 One-shot JSON is one object on stdout. Watch JSON is newline-delimited events
